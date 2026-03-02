@@ -6,9 +6,9 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import * as bcrypt from 'bcrypt'; // Sửa cách import bcrypt
+import * as bcrypt from 'bcrypt'; // ✅ Đổi lại import style
 import { JwtService } from '@nestjs/jwt';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 import { User, UserDocument } from '../users/schemas/users.schema';
 import { RegisterDto } from './dto/register.dto';
@@ -24,7 +24,6 @@ export class AuthService {
   async register(dto: RegisterDto): Promise<any> {
     const { username, password, shopId, fullName } = dto;
 
-    // 1. Check nhanh xem user tồn tại chưa
     const existingUser = await this.userModel
       .findOne({ username })
       .lean()
@@ -33,13 +32,11 @@ export class AuthService {
       throw new ConflictException('Username already exists');
     }
 
-    // 2. Hash password
-    const saltOrRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltOrRounds);
+    const hashedPassword: string = await bcrypt.hash(password, 10); // ✅ Explicit type
 
     try {
       const newUser = await this.userModel.create({
-        _id: `user_${uuidv4()}`,
+        _id: `user_${randomUUID()}`,
         shopId,
         username,
         passwordHash: hashedPassword,
@@ -47,12 +44,12 @@ export class AuthService {
         role: 'staff',
       });
 
-      // 3. Trả về data sạch (không kèm passwordHash)
-      const userObj = newUser.toObject();
-      delete userObj.passwordHash;
+      const { passwordHash, ...userObj } = newUser.toObject(); // ✅ Bỏ _password
+      void passwordHash; // ✅ Báo TypeScript biết đây là intentional unused
       return userObj;
     } catch (error) {
-      if (error.code === 11000) {
+      const mongoError = error as { code?: number };
+      if (mongoError.code === 11000) {
         throw new ConflictException('Username or Unique field already exists');
       }
       throw new InternalServerErrorException('Error creating user');
@@ -63,29 +60,23 @@ export class AuthService {
     username: string,
     password: string,
   ): Promise<{ access_token: string }> {
-    // 1. Tìm user
     const user = await this.userModel.findOne({ username }).lean().exec();
 
-    // 2. Nếu không thấy user, ném lỗi ngay
     if (!user) {
       throw new UnauthorizedException('Invalid username or password');
     }
 
-    // 3. So sánh mật khẩu
-    // Đảm bảo user cast đúng kiểu hoặc dùng 'as any' nếu lười định nghĩa interface cho lean object
-    const isMatch = await bcrypt.compare(password, (user as any).passwordHash);
+    const isMatch: boolean = await bcrypt.compare(password, user.passwordHash); // ✅ Explicit type
 
-    // FIX LỖI Ở ĐÂY: Nếu KHÔNG khớp (!) thì mới ném lỗi
     if (!isMatch) {
       throw new UnauthorizedException('Invalid username or password');
     }
 
-    // 4. Tạo payload
     const payload = {
       sub: user._id,
       username: user.username,
-      role: (user as any).role,
-      shopId: (user as any).shopId,
+      role: user.role,
+      shopId: user.shopId,
     };
 
     return {
