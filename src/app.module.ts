@@ -19,7 +19,7 @@ import { OrdersModule } from './modules/orders/orders.module';
     // Kết nối MongoDB
     MongooseModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: async (config: ConfigService) => ({
+      useFactory: (config: ConfigService) => ({
         uri: config.get<string>('MONGO_URI'),
       }),
     }),

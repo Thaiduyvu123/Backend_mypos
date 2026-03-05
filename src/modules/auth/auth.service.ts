@@ -1,12 +1,11 @@
 import {
   Injectable,
-  UnauthorizedException,
   ConflictException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import * as bcrypt from 'bcrypt'; // ✅ Đổi lại import style
+import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'crypto';
 
@@ -32,7 +31,7 @@ export class AuthService {
       throw new ConflictException('Username already exists');
     }
 
-    const hashedPassword: string = await bcrypt.hash(password, 10); // ✅ Explicit type
+    const hashedPassword: string = await bcrypt.hash(password, 10);
 
     try {
       const newUser = await this.userModel.create({
@@ -44,8 +43,8 @@ export class AuthService {
         role: 'staff',
       });
 
-      const { passwordHash, ...userObj } = newUser.toObject(); // ✅ Bỏ _password
-      void passwordHash; // ✅ Báo TypeScript biết đây là intentional unused
+      const { passwordHash, ...userObj } = newUser.toObject();
+      void passwordHash;
       return userObj;
     } catch (error) {
       const mongoError = error as { code?: number };
@@ -56,20 +55,30 @@ export class AuthService {
     }
   }
 
+  // ✅ Sửa lại hàm login
   async login(
     username: string,
     password: string,
-  ): Promise<{ access_token: string }> {
+  ): Promise<{ success: boolean; message: string; access_token?: string }> {
+    // 1. Lấy user từ DB theo username
     const user = await this.userModel.findOne({ username }).lean().exec();
 
     if (!user) {
-      throw new UnauthorizedException('Invalid username or password');
+      return {
+        success: false,
+        message: 'Sai mật khẩu hoặc tài khoản không tồn tại',
+      };
     }
 
-    const isMatch: boolean = await bcrypt.compare(password, user.passwordHash); // ✅ Explicit type
+    // 2. So sánh password với passwordHash trong DB
+    const isMatch: boolean = await bcrypt.compare(password, user.passwordHash);
 
+    // 3. Trả kết quả JSON
     if (!isMatch) {
-      throw new UnauthorizedException('Invalid username or password');
+      return {
+        success: false,
+        message: 'Sai mật khẩu',
+      };
     }
 
     const payload = {
@@ -80,6 +89,8 @@ export class AuthService {
     };
 
     return {
+      success: true,
+      message: 'Đăng nhập thành công',
       access_token: this.jwtService.sign(payload),
     };
   }
