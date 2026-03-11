@@ -16,7 +16,12 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { GoogleUser } from './strategies/google.strategy';
 
 interface RequestWithUser extends Request {
-  user: { userId: string; username: string; role: string; shopId: string };
+  user: {
+    userId: string;
+    username: string;
+    role: string;
+    shopId: string | null;
+  };
 }
 
 @Controller('auth')

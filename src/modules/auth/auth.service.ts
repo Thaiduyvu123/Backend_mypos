@@ -1,7 +1,6 @@
 import {
   Injectable,
   ConflictException,
-  UnauthorizedException,
   InternalServerErrorException,
   NotFoundException,
   BadRequestException,
@@ -114,8 +113,14 @@ export class AuthService {
       };
     }
 
-    const isMatch: boolean = bcrypt.compare(password, user.passwordHash);
-    if (!isMatch) {
+    // passwordHash can be null for Google users - already checked above for provider
+    // But TypeScript needs explicit check to avoid null type error
+    if (!user.passwordHash) {
+      return { success: false, message: 'Tài khoản không có mật khẩu' };
+    }
+
+    const result = await bcrypt.compare(password, user.passwordHash);
+    if (!result) {
       return { success: false, message: 'Sai mật khẩu' };
     }
 
