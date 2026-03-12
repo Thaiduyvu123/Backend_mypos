@@ -1,6 +1,7 @@
 import {
   Injectable,
   ConflictException,
+  // UnauthorizedException,
   InternalServerErrorException,
   NotFoundException,
   BadRequestException,
@@ -16,6 +17,7 @@ import { Shop, ShopDocument } from '../shops/schemas/shops.schema';
 import { RegisterLocalDto } from 'src/modules/auth/dto/register-local.dto';
 import { ShopSetupDto } from './dto/shop-setup.dto';
 import { GoogleUser } from './strategies/google.strategy';
+import { GeocodingService } from './geocoding.service';
 
 @Injectable()
 export class AuthService {
@@ -25,6 +27,7 @@ export class AuthService {
     @InjectModel(Shop.name)
     private readonly shopModel: Model<ShopDocument>,
     private readonly jwtService: JwtService,
+    private readonly geocodingService: GeocodingService,
   ) {}
 
   // ============================================================
@@ -261,7 +264,6 @@ export class AuthService {
       throw new BadRequestException('Google token không hợp lệ');
     }
   }
-
   // ============================================================
   // SETUP SHOP (sau khi đăng ký)
   // Cần JWT token từ bước đăng ký
@@ -281,7 +283,14 @@ export class AuthService {
     const shopId = `shop_${randomUUID()}`;
 
     try {
-      // Tạo shop
+      // ✅ Lấy toạ độ từ địa chỉ trước khi tạo shop
+      const { lat, lng } = await this.geocodingService.getCoordinates(
+        dto.address,
+        dto.city,
+        dto.country,
+      );
+
+      // Tạo shop kèm lat/lng
       const newShop = await this.shopModel.create({
         _id: shopId,
         name: dto.name,
@@ -293,6 +302,8 @@ export class AuthService {
         country: dto.country,
         businessType: dto.businessType,
         taxCode: dto.taxCode,
+        lat, // ✅
+        lng, // ✅
       });
 
       // Cập nhật user với shopId

@@ -35,6 +35,12 @@ export class Shop {
   @Prop()
   taxCode!: string;
 
+  @Prop({ default: null, type: Number })
+  lat!: number | null; // Vĩ độ
+
+  @Prop({ default: null, type: Number })
+  lng!: number | null; // Kinh độ
+
   @Prop({ default: 1 })
   syncStatus!: number;
 

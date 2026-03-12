@@ -11,6 +11,7 @@ import {
   GoogleRegisterStrategy,
 } from './strategies/google.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { GeocodingService } from './geocoding.service';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     GoogleLoginStrategy,
     GoogleRegisterStrategy,
     JwtStrategy,
+    GeocodingService,
   ],
 })
 export class AuthModule {}
