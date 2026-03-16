@@ -20,7 +20,7 @@ export class User {
   @Prop({ required: true })
   fullName!: string;
 
-  @Prop({ enum: ['admin', 'staff'], default: 'admin' })
+  @Prop({ enum: ['admin', 'owner'], default: 'owner' })
   role!: string;
 
   @Prop()

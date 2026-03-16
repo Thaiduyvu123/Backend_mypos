@@ -12,6 +12,7 @@ import {
 } from './strategies/google.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { GeocodingService } from './geocoding.service';
+import { DevicesModule } from '../devices/devices.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { GeocodingService } from './geocoding.service';
       secret: process.env.JWT_SECRET ?? 'your_secret_key',
       signOptions: { expiresIn: '1d' },
     }),
+    DevicesModule,
   ],
   controllers: [AuthController],
   providers: [
