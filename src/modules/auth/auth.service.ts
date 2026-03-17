@@ -35,8 +35,27 @@ export class AuthService {
   // Tạo user -> trả temp token -> FE gọi /shop/setup
   // ============================================================
   async registerLocal(dto: RegisterLocalDto): Promise<Record<string, unknown>> {
-    const { username, password, fullName, email, phone } = dto;
+    const { verifiedToken, username, password, fullName, email, phone } = dto;
 
+    // ✅ Bước 1: Xác thực verifiedToken
+    let tokenPayload: { email: string; purpose: string };
+    try {
+      tokenPayload = this.jwtService.verify(verifiedToken);
+    } catch {
+      throw new BadRequestException(
+        'Token xác thực email không hợp lệ hoặc đã hết hạn. Vui lòng xác thực lại.',
+      );
+    }
+    if (tokenPayload.purpose !== 'email_verified') {
+      throw new BadRequestException('Token không hợp lệ');
+    }
+
+    // ✅ Bước 2: Đảm bảo email trong token khớp với email gửi lên (nếu có)
+    if (email && email !== tokenPayload.email) {
+      throw new BadRequestException('Email không khớp với email đã xác thực');
+    }
+
+    const verifiedEmail = tokenPayload.email;
     // Kiểm tra username
     const existingUser = await this.userModel
       .findOne({ username })
@@ -67,10 +86,10 @@ export class AuthService {
         username,
         passwordHash: hashedPassword,
         fullName,
-        email,
+        email: verifiedEmail,
         phone,
         provider: 'local',
-        role: 'admin',
+        role: 'owner',
         shopSetupDone: false,
       });
 

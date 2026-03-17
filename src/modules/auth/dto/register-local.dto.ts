@@ -8,6 +8,10 @@ import {
 
 export class RegisterLocalDto {
   @IsString()
+  @IsNotEmpty({ message: 'Vui lòng xác thực email trước khi đăng ký' })
+  verifiedToken!: string;
+
+  @IsString()
   @IsNotEmpty({ message: 'Username không được để trống' })
   username!: string;
 

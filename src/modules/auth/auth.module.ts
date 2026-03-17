@@ -1,9 +1,14 @@
 import { Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
+import { PasswordService } from './password.service';
+import { PasswordController } from './password.controller';
+import { EmailService } from './email.service';
+import { EmailVerificationService } from './email-verification.service';
 import { MongooseModule } from '@nestjs/mongoose';
 import { User, UserSchema } from 'src/modules/users/schemas/users.schema';
 import { Shop, ShopSchema } from '../shops/schemas/shops.schema';
+import { Otp, OtpSchema } from './schemas/otp.schema';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import {
@@ -19,6 +24,7 @@ import { DevicesModule } from '../devices/devices.module';
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Shop.name, schema: ShopSchema },
+      { name: Otp.name, schema: OtpSchema },
     ]),
     PassportModule,
     JwtModule.register({
@@ -27,9 +33,12 @@ import { DevicesModule } from '../devices/devices.module';
     }),
     DevicesModule,
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, PasswordController],
   providers: [
     AuthService,
+    PasswordService,
+    EmailService,
+    EmailVerificationService,
     GoogleLoginStrategy,
     GoogleRegisterStrategy,
     JwtStrategy,
