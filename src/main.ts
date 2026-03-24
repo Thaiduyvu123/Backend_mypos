@@ -14,6 +14,7 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  await app.listen(process.env.PORT ?? 3000);
+  // ✅ Đảm bảo backend lắng nghe HOST 0.0.0.0 và PORT 3001 để LAN kết nối được
+  await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
 }
 bootstrap();

@@ -11,6 +11,7 @@ import { ProductsModule } from './modules/products/products.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { DevicesModule } from './modules/devices/devices.module';
 import { BusinessTypesModule } from './modules/business-types/business-types.module';
+import { ShopsModule } from './modules/shops/shops.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { BusinessTypesModule } from './modules/business-types/business-types.mod
     OrdersModule,
     DevicesModule,
     BusinessTypesModule,
+    ShopsModule
   ],
   controllers: [AppController],
   providers: [

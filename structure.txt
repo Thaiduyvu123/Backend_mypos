@@ -1,0 +1,193 @@
+.
+├── README.md
+├── dist
+│   ├── app.controller.d.ts
+│   ├── app.controller.js
+│   ├── app.controller.js.map
+│   ├── app.module.d.ts
+│   ├── app.module.js
+│   ├── app.module.js.map
+│   ├── app.service.d.ts
+│   ├── app.service.js
+│   ├── app.service.js.map
+│   ├── database
+│   │   └── seeds
+│   │       ├── business-types.seed.d.ts
+│   │       ├── business-types.seed.js
+│   │       └── business-types.seed.js.map
+│   ├── main.d.ts
+│   ├── main.js
+│   ├── main.js.map
+│   ├── modules
+│   │   ├── auth
+│   │   │   ├── auth.controller.d.ts
+│   │   │   ├── auth.controller.js
+│   │   │   ├── auth.controller.js.map
+│   │   │   ├── auth.module.d.ts
+│   │   │   ├── auth.module.js
+│   │   │   ├── auth.module.js.map
+│   │   │   ├── auth.service.d.ts
+│   │   │   ├── auth.service.js
+│   │   │   ├── auth.service.js.map
+│   │   │   ├── dto
+│   │   │   │   ├── password.dto.d.ts
+│   │   │   │   ├── password.dto.js
+│   │   │   │   ├── password.dto.js.map
+│   │   │   │   ├── pre-register.dto.d.ts
+│   │   │   │   ├── pre-register.dto.js
+│   │   │   │   ├── pre-register.dto.js.map
+│   │   │   │   ├── register-local.dto.d.ts
+│   │   │   │   ├── register-local.dto.js
+│   │   │   │   ├── register-local.dto.js.map
+│   │   │   │   ├── shop-setup.dto.d.ts
+│   │   │   │   ├── shop-setup.dto.js
+│   │   │   │   └── shop-setup.dto.js.map
+│   │   │   ├── email-verification.service.d.ts
+│   │   │   ├── email-verification.service.js
+│   │   │   ├── email-verification.service.js.map
+│   │   │   ├── email.service.d.ts
+│   │   │   ├── email.service.js
+│   │   │   ├── email.service.js.map
+│   │   │   ├── geocoding.service.d.ts
+│   │   │   ├── geocoding.service.js
+│   │   │   ├── geocoding.service.js.map
+│   │   │   ├── guards
+│   │   │   │   ├── jwt-auth.guard.d.ts
+│   │   │   │   ├── jwt-auth.guard.js
+│   │   │   │   └── jwt-auth.guard.js.map
+│   │   │   ├── password.controller.d.ts
+│   │   │   ├── password.controller.js
+│   │   │   ├── password.controller.js.map
+│   │   │   ├── password.service.d.ts
+│   │   │   ├── password.service.js
+│   │   │   ├── password.service.js.map
+│   │   │   ├── schemas
+│   │   │   │   ├── otp.schema.d.ts
+│   │   │   │   ├── otp.schema.js
+│   │   │   │   └── otp.schema.js.map
+│   │   │   └── strategies
+│   │   │       ├── google.strategy.d.ts
+│   │   │       ├── google.strategy.js
+│   │   │       ├── google.strategy.js.map
+│   │   │       ├── jwt.strategy.d.ts
+│   │   │       ├── jwt.strategy.js
+│   │   │       └── jwt.strategy.js.map
+│   │   ├── business-types
+│   │   │   ├── business-types.module.d.ts
+│   │   │   ├── business-types.module.js
+│   │   │   └── business-types.module.js.map
+│   │   ├── devices
+│   │   │   ├── devices.module.d.ts
+│   │   │   ├── devices.module.js
+│   │   │   ├── devices.module.js.map
+│   │   │   ├── devices.service.d.ts
+│   │   │   ├── devices.service.js
+│   │   │   ├── devices.service.js.map
+│   │   │   └── schemas
+│   │   │       ├── devices.schema.d.ts
+│   │   │       ├── devices.schema.js
+│   │   │       └── devices.schema.js.map
+│   │   ├── orders
+│   │   │   ├── orders.module.d.ts
+│   │   │   ├── orders.module.js
+│   │   │   └── orders.module.js.map
+│   │   ├── products
+│   │   │   ├── products.module.d.ts
+│   │   │   ├── products.module.js
+│   │   │   └── products.module.js.map
+│   │   ├── shops
+│   │   │   ├── schemas
+│   │   │   │   ├── shops.schema.d.ts
+│   │   │   │   ├── shops.schema.js
+│   │   │   │   └── shops.schema.js.map
+│   │   │   ├── shops.controller.d.ts
+│   │   │   ├── shops.controller.js
+│   │   │   ├── shops.controller.js.map
+│   │   │   ├── shops.module.d.ts
+│   │   │   ├── shops.module.js
+│   │   │   ├── shops.module.js.map
+│   │   │   ├── shops.service.d.ts
+│   │   │   ├── shops.service.js
+│   │   │   └── shops.service.js.map
+│   │   └── users
+│   │       ├── schemas
+│   │       │   ├── users.schema.d.ts
+│   │       │   ├── users.schema.js
+│   │       │   └── users.schema.js.map
+│   │       ├── users.module.d.ts
+│   │       ├── users.module.js
+│   │       └── users.module.js.map
+│   └── tsconfig.build.tsbuildinfo
+├── eslint.config.mjs
+├── nest-cli.json
+├── package-lock.json
+├── package.json
+├── postman
+│   └── globals
+│       └── workspace.globals.yaml
+├── src
+│   ├── app.controller.ts
+│   ├── app.module.ts
+│   ├── app.service.ts
+│   ├── database
+│   │   └── seeds
+│   │       └── business-types.seed.ts
+│   ├── main.ts
+│   ├── modules
+│   │   ├── auth
+│   │   │   ├── auth.controller.spec.ts
+│   │   │   ├── auth.controller.ts
+│   │   │   ├── auth.module.ts
+│   │   │   ├── auth.service.spec.ts
+│   │   │   ├── auth.service.ts
+│   │   │   ├── dto
+│   │   │   │   ├── password.dto.ts
+│   │   │   │   ├── pre-register.dto.ts
+│   │   │   │   ├── register-local.dto.ts
+│   │   │   │   └── shop-setup.dto.ts
+│   │   │   ├── email-verification.service.ts
+│   │   │   ├── email.service.ts
+│   │   │   ├── geocoding.service.ts
+│   │   │   ├── guards
+│   │   │   │   └── jwt-auth.guard.ts
+│   │   │   ├── password.controller.ts
+│   │   │   ├── password.service.ts
+│   │   │   ├── schemas
+│   │   │   │   └── otp.schema.ts
+│   │   │   └── strategies
+│   │   │       ├── google.strategy.ts
+│   │   │       └── jwt.strategy.ts
+│   │   ├── business-types
+│   │   │   └── business-types.module.ts
+│   │   ├── devices
+│   │   │   ├── devices.module.ts
+│   │   │   ├── devices.service.ts
+│   │   │   └── schemas
+│   │   │       └── devices.schema.ts
+│   │   ├── orders
+│   │   │   └── orders.module.ts
+│   │   ├── products
+│   │   │   └── products.module.ts
+│   │   ├── shops
+│   │   │   ├── schemas
+│   │   │   │   └── shops.schema.ts
+│   │   │   ├── shops.controller.ts
+│   │   │   ├── shops.module.ts
+│   │   │   └── shops.service.ts
+│   │   └── users
+│   │       ├── schemas
+│   │       │   └── users.schema.ts
+│   │       └── users.module.ts
+│   └── views
+│       └── proforma
+│           └── ProformaNivSelection.vue
+├── structure.txt
+├── test
+│   ├── app.e2e-spec.ts
+│   └── jest-e2e.json
+├── test-password.ts
+├── test.js
+├── tsconfig.build.json
+└── tsconfig.json
+
+42 directories, 149 files

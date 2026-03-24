@@ -1,5 +1,3 @@
-// Thêm vào auth.controller.ts — các decorator @Throttle cho endpoint nhạy cảm
-
 import {
   Controller,
   Get,
@@ -19,18 +17,30 @@ import { ShopSetupDto } from './dto/shop-setup.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { GoogleUser } from './strategies/google.strategy';
 import { PreRegisterDto, VerifyEmailDto } from './dto/pre-register.dto';
-
+ 
 interface RequestWithUser extends Request {
-  user: { userId: string; username: string; role: string; shopId: string };
+  user: {
+    userId: string;
+    username: string;
+    role: string;
+    shopId: string;
+    // ✅ Thêm field này
+    pendingUserData?: {
+      passwordHash: string;
+      fullName: string;
+      email: string;
+      phone: string | null;
+    };
+  };
 }
-
+ 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly emailVerificationService: EmailVerificationService,
   ) {}
-
+ 
   // ============================================================
   // BƯỚC 1: Gửi OTP xác thực email
   // POST /api/auth/pre-register
@@ -41,7 +51,7 @@ export class AuthController {
   async preRegister(@Body() dto: PreRegisterDto) {
     return this.emailVerificationService.preRegister(dto);
   }
-
+ 
   // ============================================================
   // BƯỚC 2: Xác thực OTP email → nhận verifiedToken
   // POST /api/auth/verify-email
@@ -51,17 +61,19 @@ export class AuthController {
   async verifyEmail(@Body() dto: VerifyEmailDto) {
     return this.emailVerificationService.verifyEmail(dto);
   }
-
+ 
   // ============================================================
-  // BƯỚC 3: Đăng ký (cần verifiedToken)
+  // BƯỚC 2.5: Đăng ký (cần verifiedToken)
   // POST /api/auth/register
+  // Chỉ validate, KHÔNG tạo user
+  // User sẽ được tạo ở bước 3 (setupShop)
   // ============================================================
   @Post('register')
   @Throttle({ default: { ttl: 60000, limit: 10 } }) // ✅ 10 req/phút
   async registerLocal(@Body() dto: RegisterLocalDto) {
     return this.authService.registerLocal(dto);
   }
-
+ 
   // ============================================================
   // ĐĂNG NHẬP LOCAL
   // GET /api/auth/login/:username/:password
@@ -74,7 +86,7 @@ export class AuthController {
   ) {
     return this.authService.loginLocal(username, password);
   }
-
+ 
   // ============================================================
   // GOOGLE OAUTH
   // ============================================================
@@ -82,26 +94,26 @@ export class AuthController {
   @SkipThrottle() // Google tự xử lý rate limit
   @UseGuards(AuthGuard('google-register'))
   googleRegister() {}
-
+ 
   @Get('google/register/callback')
   @SkipThrottle()
   @UseGuards(AuthGuard('google-register'))
   async googleRegisterCallback(@Req() req: Request) {
     return this.authService.registerGoogle(req.user as GoogleUser);
   }
-
+ 
   @Get('google/login')
   @SkipThrottle()
   @UseGuards(AuthGuard('google-login'))
   googleLogin() {}
-
+ 
   @Get('google/login/callback')
   @SkipThrottle()
   @UseGuards(AuthGuard('google-login'))
   async googleLoginCallback(@Req() req: Request) {
     return this.authService.loginGoogle(req.user as GoogleUser);
   }
-
+ 
   @Post('google/token')
   @Throttle({ default: { ttl: 60000, limit: 10 } })
   async googleToken(
@@ -110,14 +122,31 @@ export class AuthController {
   ) {
     return this.authService.googleWithToken(idToken, mode);
   }
-
+ 
   // ============================================================
-  // SETUP SHOP
+  // SETUP SHOP - BƯỚC 3
   // POST /api/auth/shop/setup
+  // TẠO USER + SHOP cùng lúc
   // ============================================================
   @Post('shop/setup')
   @UseGuards(JwtAuthGuard)
   async setupShop(@Req() req: RequestWithUser, @Body() dto: ShopSetupDto) {
-    return this.authService.setupShop(req.user.userId, dto);
+    // ✅ Lấy pendingUserData từ req.user (từ token)
+    const pendingUserData = req.user.pendingUserData;
+ 
+    return this.authService.setupShop(
+      req.user.userId,
+      dto,
+      pendingUserData, // ✅ Truyền vào setupShop
+    );
+  }
+
+  // ============================================================
+  // LẤY THÔNG TIN USER - GET /api/auth/me
+  // ============================================================
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async getMe(@Req() req: RequestWithUser) {
+    return this.authService.getMe(req.user.userId, req.user);
   }
 }

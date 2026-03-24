@@ -29,11 +29,12 @@ export class GeocodingService {
     const encodedAddress = encodeURIComponent(fullAddress);
 
     const url =
-      `https://nominatim.openstreetmap.org/search` +
-      `?q=${encodedAddress}` +
-      `&format=json` +
-      `&limit=1` +
-      `&addressdetails=1`;
+        `https://nominatim.openstreetmap.org/search` +
+        `?q=${encodedAddress}` +
+        `&format=json` +
+        `&limit=5` +
+        `&addressdetails=1` +
+        `&countrycodes=vn`;
 
     try {
       this.logger.log(`Geocoding: "${fullAddress}"`);
@@ -57,18 +58,29 @@ export class GeocodingService {
         display_name: string;
       }>;
 
-      if (!data || data.length === 0) {
-        this.logger.warn(`Không tìm thấy toạ độ cho: "${fullAddress}"`);
-        return { lat: null, lng: null };
-      }
+     if (!data || data.length === 0) {
+          this.logger.warn(`Không tìm thấy toạ độ cho: "${fullAddress}"`);
+          return { lat: null, lng: null };
+        }
 
-      const { lat, lon, display_name } = data[0];
-      this.logger.log(`Tìm thấy: ${display_name} → (${lat}, ${lon})`);
+        // Tìm kết quả khớp với tên city nhất
+        const cityNormalized = city
+          .toLowerCase()
+          .replace('tp. ', '')
+          .replace('tp.', '')
+          .trim();
 
-      return {
-        lat: parseFloat(lat),
-        lng: parseFloat(lon),
-      };
+        const best = data.find(d =>
+          d.display_name.toLowerCase().includes(cityNormalized)
+        ) || data[0];
+
+        const { lat, lon, display_name } = best;
+        this.logger.log(`Tìm thấy: ${display_name} → (${lat}, ${lon})`);
+
+        return {
+          lat: parseFloat(lat),
+          lng: parseFloat(lon),
+        };
     } catch (error) {
       this.logger.error(`Lỗi geocoding: ${(error as Error).message}`);
       return { lat: null, lng: null };

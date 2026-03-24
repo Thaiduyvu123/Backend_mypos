@@ -28,7 +28,7 @@ import { DevicesModule } from '../devices/devices.module';
     ]),
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'your_secret_key',
+      secret: process.env.JWT_SECRET ?? 'mypos_secret_key_2026',
       signOptions: { expiresIn: '1d' },
     }),
     DevicesModule,

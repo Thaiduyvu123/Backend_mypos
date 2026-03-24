@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
 @Injectable()
@@ -6,12 +7,12 @@ export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter;
 
-  constructor() {
+  constructor(private readonly configService: ConfigService) {
     this.transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
+        user: this.configService.get<string>('GMAIL_USER'),
+        pass: this.configService.get<string>('GMAIL_APP_PASSWORD'),
       },
     });
   }
@@ -51,7 +52,7 @@ export class EmailService {
   ): Promise<boolean> {
     try {
       await this.transporter.sendMail({
-        from: `"myPOS" <${process.env.GMAIL_USER}>`,
+        from: `"myPOS" <${this.configService.get<string>('GMAIL_USER')}>`,
         to: email,
         subject: options.subject,
         html: `
