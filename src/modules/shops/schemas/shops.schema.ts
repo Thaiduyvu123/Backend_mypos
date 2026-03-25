@@ -29,8 +29,8 @@ export class Shop {
   @Prop({ required: true })
   country!: string;
 
-  @Prop({ required: true })
-  businessType!: string;
+  @Prop({ type: [String], enum: ['rental', 'sale'], required: true })
+  businessType!: string[];
 
   @Prop()
   taxCode!: string;

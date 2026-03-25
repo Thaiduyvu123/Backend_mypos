@@ -17,7 +17,7 @@ import { ShopSetupDto } from './dto/shop-setup.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { GoogleUser } from './strategies/google.strategy';
 import { PreRegisterDto, VerifyEmailDto } from './dto/pre-register.dto';
- 
+
 interface RequestWithUser extends Request {
   user: {
     userId: string;
@@ -33,14 +33,14 @@ interface RequestWithUser extends Request {
     };
   };
 }
- 
+
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly emailVerificationService: EmailVerificationService,
   ) {}
- 
+
   // ============================================================
   // BƯỚC 1: Gửi OTP xác thực email
   // POST /api/auth/pre-register

@@ -1,4 +1,18 @@
-import { IsString, IsNotEmpty, IsOptional, IsEmail } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEmail,
+  IsArray,
+  ArrayMinSize,
+  ArrayMaxSize,
+  IsEnum,
+} from 'class-validator';
+
+export class BusinessType {
+  RENTAL = 'rental';
+  SALE = 'sale';
+}
 
 export class ShopSetupDto {
   @IsString()
@@ -29,9 +43,14 @@ export class ShopSetupDto {
   @IsNotEmpty({ message: 'Quốc gia không được để trống' })
   country!: string;
 
-  @IsString()
-  @IsNotEmpty({ message: 'Loại hình kinh doanh không được để trống' })
-  businessType!: string;
+  @IsArray()
+  @ArrayMinSize(1, { message: 'Chọn ít nhất 1 loại hình kinh doanh' })
+  @ArrayMaxSize(2, { message: 'Chỉ được chọn tối đa 2 loại hình kinh doanh' })
+  @IsEnum(BusinessType, {
+    each: true,
+    message: 'Loại hình kinh doanh không hợp lệ',
+  })
+  businessType!: BusinessType[];
 
   @IsOptional()
   @IsString()

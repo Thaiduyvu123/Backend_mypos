@@ -26,7 +26,7 @@ export class Otp {
   // ✅ Phân biệt OTP đăng ký vs quên mật khẩu
   @Prop({
     enum: ['register', 'forgot_password'],
-    default: 'forgot_password',
+    required: true,
   })
   purpose!: string;
 }
