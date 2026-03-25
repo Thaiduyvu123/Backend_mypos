@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { AuthGuard } from '@nestjs/passport';
-import { Request } from 'express';
+import { FastifyRequest } from 'fastify'; // ✅ Dùng FastifyRequest
 import { AuthService } from './auth.service';
 import { EmailVerificationService } from './email-verification.service';
 import { RegisterLocalDto } from './dto/register-local.dto';
@@ -18,20 +18,8 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { GoogleUser } from './strategies/google.strategy';
 import { PreRegisterDto, VerifyEmailDto } from './dto/pre-register.dto';
 
-interface RequestWithUser extends Request {
-  user: {
-    userId: string;
-    username: string;
-    role: string;
-    shopId: string;
-    // ✅ Thêm field này
-    pendingUserData?: {
-      passwordHash: string;
-      fullName: string;
-      email: string;
-      phone: string | null;
-    };
-  };
+interface FastifyRequestWithUser extends FastifyRequest {
+  user: { userId: string; username: string; role: string; shopId: string };
 }
 
 @Controller('auth')
@@ -41,79 +29,57 @@ export class AuthController {
     private readonly emailVerificationService: EmailVerificationService,
   ) {}
 
-  // ============================================================
-  // BƯỚC 1: Gửi OTP xác thực email
-  // POST /api/auth/pre-register
-  // Rate limit: 10 request/phút/IP (chặt hơn mặc định)
-  // ============================================================
   @Post('pre-register')
-  @Throttle({ default: { ttl: 60000, limit: 10 } }) // ✅ 10 req/phút
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
   async preRegister(@Body() dto: PreRegisterDto) {
     return this.emailVerificationService.preRegister(dto);
   }
- 
-  // ============================================================
-  // BƯỚC 2: Xác thực OTP email → nhận verifiedToken
-  // POST /api/auth/verify-email
-  // ============================================================
+
   @Post('verify-email')
-  @Throttle({ default: { ttl: 60000, limit: 10 } }) // ✅ 10 req/phút
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
   async verifyEmail(@Body() dto: VerifyEmailDto) {
     return this.emailVerificationService.verifyEmail(dto);
   }
- 
-  // ============================================================
-  // BƯỚC 2.5: Đăng ký (cần verifiedToken)
-  // POST /api/auth/register
-  // Chỉ validate, KHÔNG tạo user
-  // User sẽ được tạo ở bước 3 (setupShop)
-  // ============================================================
+
   @Post('register')
-  @Throttle({ default: { ttl: 60000, limit: 10 } }) // ✅ 10 req/phút
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
   async registerLocal(@Body() dto: RegisterLocalDto) {
     return this.authService.registerLocal(dto);
   }
- 
-  // ============================================================
-  // ĐĂNG NHẬP LOCAL
-  // GET /api/auth/login/:username/:password
-  // ============================================================
+
   @Get('login/:username/:password')
-  @Throttle({ default: { ttl: 60000, limit: 20 } }) // ✅ 20 req/phút
+  @Throttle({ default: { ttl: 60000, limit: 20 } })
   async loginLocal(
     @Param('username') username: string,
     @Param('password') password: string,
   ) {
     return this.authService.loginLocal(username, password);
   }
- 
-  // ============================================================
-  // GOOGLE OAUTH
-  // ============================================================
+
   @Get('google/register')
-  @SkipThrottle() // Google tự xử lý rate limit
+  @SkipThrottle()
   @UseGuards(AuthGuard('google-register'))
   googleRegister() {}
- 
+
   @Get('google/register/callback')
   @SkipThrottle()
   @UseGuards(AuthGuard('google-register'))
-  async googleRegisterCallback(@Req() req: Request) {
+  async googleRegisterCallback(@Req() req: FastifyRequest) {
     return this.authService.registerGoogle(req.user as GoogleUser);
   }
- 
+
   @Get('google/login')
   @SkipThrottle()
   @UseGuards(AuthGuard('google-login'))
   googleLogin() {}
- 
+
   @Get('google/login/callback')
   @SkipThrottle()
   @UseGuards(AuthGuard('google-login'))
-  async googleLoginCallback(@Req() req: Request) {
+  async googleLoginCallback(@Req() req: FastifyRequest) {
     return this.authService.loginGoogle(req.user as GoogleUser);
   }
- 
+
   @Post('google/token')
   @Throttle({ default: { ttl: 60000, limit: 10 } })
   async googleToken(
@@ -122,31 +88,13 @@ export class AuthController {
   ) {
     return this.authService.googleWithToken(idToken, mode);
   }
- 
-  // ============================================================
-  // SETUP SHOP - BƯỚC 3
-  // POST /api/auth/shop/setup
-  // TẠO USER + SHOP cùng lúc
-  // ============================================================
+
   @Post('shop/setup')
   @UseGuards(JwtAuthGuard)
-  async setupShop(@Req() req: RequestWithUser, @Body() dto: ShopSetupDto) {
-    // ✅ Lấy pendingUserData từ req.user (từ token)
-    const pendingUserData = req.user.pendingUserData;
- 
-    return this.authService.setupShop(
-      req.user.userId,
-      dto,
-      pendingUserData, // ✅ Truyền vào setupShop
-    );
-  }
-
-  // ============================================================
-  // LẤY THÔNG TIN USER - GET /api/auth/me
-  // ============================================================
-  @Get('me')
-  @UseGuards(JwtAuthGuard)
-  async getMe(@Req() req: RequestWithUser) {
-    return this.authService.getMe(req.user.userId, req.user);
+  async setupShop(
+    @Req() req: FastifyRequestWithUser,
+    @Body() dto: ShopSetupDto,
+  ) {
+    return this.authService.setupShop(req.user.userId, dto);
   }
 }

@@ -8,7 +8,7 @@ export interface GoogleUser {
   email: string;
   avatarUrl: string;
   provider: 'google';
-  mode: 'login' | 'register'; // phân biệt đăng nhập hay đăng ký
+  mode: 'login' | 'register';
 }
 
 @Injectable()
@@ -32,15 +32,14 @@ export class GoogleLoginStrategy extends PassportStrategy(
     done: VerifyCallback,
   ): void {
     const { id, displayName, emails, photos } = profile;
-    const user: GoogleUser = {
+    done(null, {
       providerId: id,
       fullName: displayName,
       email: emails?.[0]?.value ?? '',
       avatarUrl: photos?.[0]?.value ?? '',
       provider: 'google',
       mode: 'login',
-    };
-    done(null, user);
+    } as GoogleUser);
   }
 }
 
@@ -65,14 +64,13 @@ export class GoogleRegisterStrategy extends PassportStrategy(
     done: VerifyCallback,
   ): void {
     const { id, displayName, emails, photos } = profile;
-    const user: GoogleUser = {
+    done(null, {
       providerId: id,
       fullName: displayName,
       email: emails?.[0]?.value ?? '',
       avatarUrl: photos?.[0]?.value ?? '',
       provider: 'google',
       mode: 'register',
-    };
-    done(null, user);
+    } as GoogleUser);
   }
 }

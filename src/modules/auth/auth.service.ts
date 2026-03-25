@@ -335,7 +335,7 @@ export class AuthService {
         address: dto.address,
         city: dto.city,
         country: dto.country,
-        businessType: dto.businessType,
+        businessType: dto.businessType as string[],
         taxCode: dto.taxCode,
         lat,
         lng,

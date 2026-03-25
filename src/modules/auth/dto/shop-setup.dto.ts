@@ -9,9 +9,9 @@ import {
   IsEnum,
 } from 'class-validator';
 
-export class BusinessType {
-  RENTAL = 'rental';
-  SALE = 'sale';
+export enum BusinessType {
+  RENTAL = 'rental',
+  SALE = 'sale',
 }
 
 export class ShopSetupDto {

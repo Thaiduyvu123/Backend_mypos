@@ -1,12 +1,30 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
+import {
+  FastifyAdapter,
+  NestFastifyApplication,
+} from '@nestjs/platform-fastify';
 import { ValidationPipe } from '@nestjs/common';
+import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  app.enableCors();
-  app.setGlobalPrefix('api'); // ✅ Thêm prefix /api
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    new FastifyAdapter({
+      logger: true,   // Fastify built-in logger
+    }),
+  );
+
+  // ✅ CORS
+  await app.register(require('@fastify/cors'), {
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  });
+
+  // ✅ API Prefix
+  app.setGlobalPrefix('api');
+
+  // ✅ Validation
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -14,7 +32,10 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  // ✅ Đảm bảo backend lắng nghe HOST 0.0.0.0 và PORT 3001 để LAN kết nối được
-  await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
+
+  const port = process.env.PORT ?? 3001;
+  // ✅ Fastify cần listen trên '0.0.0.0' thay vì 'localhost'
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 Server running on http://localhost:${port}/api`);
 }
 bootstrap();
