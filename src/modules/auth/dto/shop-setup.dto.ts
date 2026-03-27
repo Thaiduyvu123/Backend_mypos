@@ -9,7 +9,8 @@ import {
   IsEnum,
 } from 'class-validator';
 
-export enum BusinessType {
+// ✅ Đổi tên thành BusinessTypeEnum để tránh xung đột với class BusinessType
+export enum BusinessTypeEnum {
   RENTAL = 'rental',
   SALE = 'sale',
 }
@@ -46,11 +47,11 @@ export class ShopSetupDto {
   @IsArray()
   @ArrayMinSize(1, { message: 'Chọn ít nhất 1 loại hình kinh doanh' })
   @ArrayMaxSize(2, { message: 'Chỉ được chọn tối đa 2 loại hình kinh doanh' })
-  @IsEnum(BusinessType, {
+  @IsEnum(BusinessTypeEnum, {
     each: true,
-    message: 'Loại hình kinh doanh không hợp lệ',
+    message: 'Loại hình không hợp lệ. Chỉ chấp nhận: rental, sale',
   })
-  businessType!: BusinessType[];
+  businessType!: BusinessTypeEnum[];
 
   @IsOptional()
   @IsString()

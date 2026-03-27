@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
 @Injectable()
@@ -7,12 +6,12 @@ export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor() {
     this.transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: this.configService.get<string>('GMAIL_USER'),
-        pass: this.configService.get<string>('GMAIL_APP_PASSWORD'),
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD,
       },
     });
   }
@@ -20,17 +19,17 @@ export class EmailService {
   // ✅ OTP xác thực email khi đăng ký
   async sendRegisterOtp(email: string, otpCode: string): Promise<boolean> {
     return this.sendOtpEmail(email, otpCode, {
-      subject: 'Xác thực email đăng ký myPOS',
+      subject: 'Xác thực email đăng ký My1POS',
       title: 'Xác thực Email',
       description: 'Nhập mã OTP này để xác thực email và hoàn tất đăng ký:',
-      note: 'Nếu bạn không đăng ký tài khoản myPOS, hãy bỏ qua email này.',
+      note: 'Nếu bạn không đăng ký tài khoản My1POS, hãy bỏ qua email này.',
     });
   }
 
   // ✅ OTP quên mật khẩu
   async sendOtp(email: string, otpCode: string): Promise<boolean> {
     return this.sendOtpEmail(email, otpCode, {
-      subject: 'Mã OTP đặt lại mật khẩu myPOS',
+      subject: 'Mã OTP đặt lại mật khẩu My1POS',
       title: 'Đặt lại mật khẩu',
       description: 'Nhập mã OTP này để đặt lại mật khẩu:',
       note: 'Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này.',
@@ -52,7 +51,7 @@ export class EmailService {
   ): Promise<boolean> {
     try {
       await this.transporter.sendMail({
-        from: `"myPOS" <${this.configService.get<string>('GMAIL_USER')}>`,
+        from: `"My1POS" <${process.env.GMAIL_USER}>`,
         to: email,
         subject: options.subject,
         html: `
@@ -79,7 +78,7 @@ export class EmailService {
             <p style="color: #9CA3AF; font-size: 13px;">${options.note}</p>
             <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;" />
             <p style="color: #9CA3AF; font-size: 12px; text-align: center;">
-              myPOS - Hệ thống quản lý bán hàng
+              My1POS - Hệ thống quản lý bán hàng
             </p>
           </div>
         `,

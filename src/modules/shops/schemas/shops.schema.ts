@@ -29,6 +29,7 @@ export class Shop {
   @Prop({ required: true })
   country!: string;
 
+  // ✅ Đổi thành array string
   @Prop({ type: [String], enum: ['rental', 'sale'], required: true })
   businessType!: string[];
 
@@ -36,10 +37,10 @@ export class Shop {
   taxCode!: string;
 
   @Prop({ default: null, type: Number })
-  lat!: number | null; // Vĩ độ
+  lat!: number | null;
 
   @Prop({ default: null, type: Number })
-  lng!: number | null; // Kinh độ
+  lng!: number | null;
 
   @Prop({ default: 1 })
   syncStatus!: number;

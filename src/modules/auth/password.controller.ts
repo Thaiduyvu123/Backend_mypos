@@ -1,7 +1,7 @@
 import { Controller, Post, Body, Req, UseGuards } from '@nestjs/common';
-import { FastifyRequest } from 'fastify'; // ✅ Dùng FastifyRequest
+import { FastifyRequest } from 'fastify';           // ✅ Dùng FastifyRequest
 import { PasswordService } from './password.service';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { JwtAuthGuard } from 'src/common/guards';
 import {
   ChangePasswordDto,
   ForgotPasswordDto,

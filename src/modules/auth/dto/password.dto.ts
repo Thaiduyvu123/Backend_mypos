@@ -1,10 +1,4 @@
-import {
-  IsString,
-  MinLength,
-  IsEmail,
-  IsNotEmpty,
-  Length,
-} from 'class-validator';
+import { IsString, MinLength, IsEmail, IsNotEmpty, Length } from 'class-validator';
 
 // DTO đổi mật khẩu (đã đăng nhập)
 export class ChangePasswordDto {

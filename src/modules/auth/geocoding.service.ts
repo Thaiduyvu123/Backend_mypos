@@ -23,18 +23,19 @@ export class GeocodingService {
     country: string,
   ): Promise<GeoCoordinates> {
     // Ghép địa chỉ đầy đủ để Nominatim tìm kiếm chính xác hơn
-    const fullAddress = [address, city, country].filter(Boolean).join(', ');
+    const fullAddress = [address, city, country]
+      .filter(Boolean)
+      .join(', ');
 
     // Encode để dùng trong URL
     const encodedAddress = encodeURIComponent(fullAddress);
 
     const url =
-        `https://nominatim.openstreetmap.org/search` +
-        `?q=${encodedAddress}` +
-        `&format=json` +
-        `&limit=5` +
-        `&addressdetails=1` +
-        `&countrycodes=vn`;
+      `https://nominatim.openstreetmap.org/search` +
+      `?q=${encodedAddress}` +
+      `&format=json` +
+      `&limit=1` +
+      `&addressdetails=1`;
 
     try {
       this.logger.log(`Geocoding: "${fullAddress}"`);
@@ -58,29 +59,18 @@ export class GeocodingService {
         display_name: string;
       }>;
 
-     if (!data || data.length === 0) {
-          this.logger.warn(`Không tìm thấy toạ độ cho: "${fullAddress}"`);
-          return { lat: null, lng: null };
-        }
+      if (!data || data.length === 0) {
+        this.logger.warn(`Không tìm thấy toạ độ cho: "${fullAddress}"`);
+        return { lat: null, lng: null };
+      }
 
-        // Tìm kết quả khớp với tên city nhất
-        const cityNormalized = city
-          .toLowerCase()
-          .replace('tp. ', '')
-          .replace('tp.', '')
-          .trim();
+      const { lat, lon, display_name } = data[0];
+      this.logger.log(`Tìm thấy: ${display_name} → (${lat}, ${lon})`);
 
-        const best = data.find(d =>
-          d.display_name.toLowerCase().includes(cityNormalized)
-        ) || data[0];
-
-        const { lat, lon, display_name } = best;
-        this.logger.log(`Tìm thấy: ${display_name} → (${lat}, ${lon})`);
-
-        return {
-          lat: parseFloat(lat),
-          lng: parseFloat(lon),
-        };
+      return {
+        lat: parseFloat(lat),
+        lng: parseFloat(lon),
+      };
     } catch (error) {
       this.logger.error(`Lỗi geocoding: ${(error as Error).message}`);
       return { lat: null, lng: null };

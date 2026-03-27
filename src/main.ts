@@ -1,18 +1,15 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import {
-  FastifyAdapter,
-  NestFastifyApplication,
-} from '@nestjs/platform-fastify';
-import { ValidationPipe } from '@nestjs/common';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
+import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({
-      logger: true,   // Fastify built-in logger
-    }),
+    new FastifyAdapter({ logger: true }),
   );
 
   // ✅ CORS
@@ -21,8 +18,9 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
-  // ✅ API Prefix
+  // ✅ API prefix + versioning
   app.setGlobalPrefix('api');
+  app.enableVersioning({ type: VersioningType.URI });
 
   // ✅ Validation
   app.useGlobalPipes(
@@ -33,9 +31,37 @@ async function bootstrap() {
     }),
   );
 
-  const port = process.env.PORT ?? 3001;
-  // ✅ Fastify cần listen trên '0.0.0.0' thay vì 'localhost'
+  // ✅ Global exception filter
+  app.useGlobalFilters(new AllExceptionsFilter());
+
+  // ✅ Swagger
+  const config = new DocumentBuilder()
+    .setTitle('My1POS API')
+    .setDescription('Landing Page + Dashboard API')
+    .setVersion('1.0')
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'JWT-auth',
+    )
+    .addTag('Auth - Landing', 'Đăng ký / Đăng nhập người dùng')
+    .addTag('Auth - Dashboard', 'Đăng nhập admin dashboard')
+    .addTag('Users', 'Quản lý người dùng')
+    .addTag('Shops', 'Quản lý cửa hàng')
+    .addTag('Devices', 'Quản lý thiết bị')
+    .addTag('Business Types', 'Loại hình kinh doanh')
+    .addTag('Audit Logs', 'Nhật ký hành động')
+    .addTag('Sync', 'Đồng bộ dữ liệu offline')
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('docs', app, document, {
+    swaggerOptions: { persistAuthorization: true },
+  });
+
+  const port = process.env.PORT ?? 3000;
   await app.listen(port, '0.0.0.0');
-  console.log(`🚀 Server running on http://localhost:${port}/api`);
+
+  console.log(`🚀 API:     http://localhost:${port}/api/v1`);
+  console.log(`📖 Swagger: http://localhost:${port}/docs`);
 }
 bootstrap();

@@ -1,6 +1,7 @@
 import {
   Injectable,
   ConflictException,
+  UnauthorizedException,
   InternalServerErrorException,
   NotFoundException,
   BadRequestException,
@@ -13,10 +14,11 @@ import { randomUUID } from 'crypto';
 
 import { User, UserDocument } from '../users/schemas/users.schema';
 import { Shop, ShopDocument } from '../shops/schemas/shops.schema';
-import { RegisterLocalDto } from 'src/modules/auth/dto/register-local.dto';
+import { RegisterLocalDto } from './dto/register-local.dto';
 import { ShopSetupDto } from './dto/shop-setup.dto';
 import { GoogleUser } from './strategies/google.strategy';
 import { GeocodingService } from './geocoding.service';
+import { DeviceService, DeviceInfo } from '../devices/device.service';
 
 @Injectable()
 export class AuthService {
@@ -27,76 +29,67 @@ export class AuthService {
     private readonly shopModel: Model<ShopDocument>,
     private readonly jwtService: JwtService,
     private readonly geocodingService: GeocodingService,
+    private readonly deviceService: DeviceService,  // ✅ Inject
   ) {}
 
   // ============================================================
-  // ĐĂNG KÝ LOCAL - BƯỚC 2
-  // Chỉ validate và tạo tempToken (KHÔNG tạo user)
-  // User sẽ được tạo ở bước 3 (setupShop)
+  // ĐĂNG KÝ LOCAL
+  // Tạo user -> trả temp token -> FE gọi /shop/setup
   // ============================================================
   async registerLocal(dto: RegisterLocalDto): Promise<Record<string, unknown>> {
-    const { verifiedToken, username, password, fullName, email, phone } = dto;
-    // ✅ Bước 1: Xác thực verifiedToken
-    let tokenPayload: { email: string; purpose: string };
-    try {
-      tokenPayload = this.jwtService.verify(verifiedToken);
-    } catch {
-      throw new BadRequestException(
-        'Token xác thực email không hợp lệ hoặc đã hết hạn. Vui lòng xác thực lại.',
-      );
-    }
-    if (tokenPayload.purpose !== 'email_verified') {
-      throw new BadRequestException('Token không hợp lệ');
-    }
-    const verifiedEmail = tokenPayload.email;
-    // ✅ Bước 2: Kiểm tra username (KHÔNG tạo user)
-    const existingUser = await this.userModel
-      .findOne({ username })
-      .lean()
-      .exec();
+    const { username, password, fullName, email, phone } = dto;
+
+    // Kiểm tra username
+    const existingUser = await this.userModel.findOne({ username }).lean().exec();
     if (existingUser) {
       throw new ConflictException('Username đã tồn tại');
     }
-    // ✅ Bước 3: Kiểm tra email (KHÔNG tạo user)
-    const existingEmail = await this.userModel
-      .findOne({ email: verifiedEmail })
-      .lean()
-      .exec();
-    if (existingEmail) {
-      throw new ConflictException('Email đã được sử dụng');
+
+    // Kiểm tra email nếu có
+    if (email) {
+      const existingEmail = await this.userModel.findOne({ email }).lean().exec();
+      if (existingEmail) {
+        throw new ConflictException('Email đã được sử dụng');
+      }
     }
 
-    // ✅ Bước 4: Hash password để lưu trong token
-    const hashedPassword: string = password; // nhận hash từ frontend
+    const hashedPassword: string = await bcrypt.hash(password, 10);
     const userId = `user_${randomUUID()}`;
 
-    // ✅ Bước 5: Tạo tempToken với thông tin lưu vào token
-    // Thông tin này sẽ được dùng ở bước 3 (setupShop) để tạo user
-    console.log('🔑 JWT_SECRET được dùng:', process.env.JWT_SECRET);
-    console.log('🔑 Secret từ JwtService:', this.jwtService);
-    const tempToken = this.jwtService.sign(
-      {
-        sub: userId,
-        username,
-        role: 'owner',
+    try {
+      const newUser = await this.userModel.create({
+        _id: userId,
         shopId: null,
-        // 🔑 LƯU THÔNG TIN CẦN DÙNG Ở BƯỚC 3 (setupShop)
-        pendingUserData: {
-          passwordHash: hashedPassword,
-          fullName,
-          email: verifiedEmail,
-          phone: phone || null,
-        },
-      },
-      { expiresIn: '1h' }, // Token có hiệu lực 1 giờ
-    );
+        username,
+        passwordHash: hashedPassword,
+        fullName,
+        email,
+        phone,
+        provider: 'local',
+        role: 'admin',
+        shopSetupDone: false,
+      });
 
-    return {
-      success: true,
-      message: 'Xác thực thành công. Vui lòng điền thông tin shop.',
-      access_token: tempToken,
-      shopSetupDone: false,
-    };
+      const { passwordHash, ...userObj } = newUser.toObject();
+      void passwordHash;
+
+      // Trả temp token (chưa có shopId)
+      const tempToken = this.generateToken(newUser.toObject() as unknown as Record<string, unknown>);
+
+      return {
+        success: true,
+        message: 'Đăng ký thành công. Vui lòng điền thông tin shop.',
+        access_token: tempToken,
+        shopSetupDone: false,
+        user: userObj,
+      };
+    } catch (error) {
+      const mongoError = error as { code?: number };
+      if (mongoError.code === 11000) {
+        throw new ConflictException('Thông tin đã tồn tại');
+      }
+      throw new InternalServerErrorException('Lỗi tạo tài khoản');
+    }
   }
 
   // ============================================================
@@ -105,6 +98,7 @@ export class AuthService {
   async loginLocal(
     username: string,
     password: string,
+    deviceInfo?: DeviceInfo,
   ): Promise<Record<string, unknown>> {
     const user = await this.userModel.findOne({ username }).lean().exec();
 
@@ -123,28 +117,36 @@ export class AuthService {
       return { success: false, message: 'Tài khoản không có mật khẩu' };
     }
 
-    const result = await bcrypt.compare(password, user.passwordHash);
-    if (!result) {
+    const isMatch: boolean = await (bcrypt.compare(password, user.passwordHash) as Promise<boolean>);
+    if (!isMatch) {
       return { success: false, message: 'Sai mật khẩu' };
     }
 
-    const token = this.generateToken(user);
+    // ✅ Đăng ký thiết bị - tự động đăng xuất thiết bị cũ nếu vượt giới hạn
+    const device = await this.deviceService.registerDevice(
+      user._id as string,
+      deviceInfo ?? { deviceName: 'Unknown Device' },
+    );
+
+    const token = this.generateToken(user as unknown as Record<string, unknown>);
+
     return {
       success: true,
       message: 'Đăng nhập thành công',
       access_token: token,
       shopSetupDone: user.shopSetupDone,
+      deviceId: device._id,
     };
   }
 
   // ============================================================
   // ĐĂNG KÝ GOOGLE
+  // Nếu email đã tồn tại → báo lỗi yêu cầu đăng nhập
   // ============================================================
-  async registerGoogle(
-    googleUser: GoogleUser,
-  ): Promise<Record<string, unknown>> {
+  async registerGoogle(googleUser: GoogleUser): Promise<Record<string, unknown>> {
     const { providerId, fullName, email, avatarUrl } = googleUser;
 
+    // Kiểm tra email đã tồn tại chưa
     const existingUser = await this.userModel
       .findOne({ $or: [{ email }, { providerId }] })
       .lean()
@@ -176,7 +178,7 @@ export class AuthService {
       const { passwordHash, ...userObj } = newUser.toObject();
       void passwordHash;
 
-      const tempToken = this.generateToken(newUser.toObject());
+      const tempToken = this.generateToken(newUser.toObject() as unknown as Record<string, unknown>);
 
       return {
         success: true,
@@ -196,6 +198,7 @@ export class AuthService {
 
   // ============================================================
   // ĐĂNG NHẬP GOOGLE
+  // Nếu chưa có tài khoản → báo lỗi yêu cầu đăng ký
   // ============================================================
   async loginGoogle(googleUser: GoogleUser): Promise<Record<string, unknown>> {
     const { providerId, email } = googleUser;
@@ -206,10 +209,12 @@ export class AuthService {
       .exec();
 
     if (!user) {
-      throw new NotFoundException('Tài khoản chưa tồn tại. Vui lòng đăng ký.');
+      throw new NotFoundException(
+        'Tài khoản chưa tồn tại. Vui lòng đăng ký.',
+      );
     }
 
-    const token = this.generateToken(user);
+    const token = this.generateToken(user as unknown as Record<string, unknown>);
     return {
       success: true,
       message: 'Đăng nhập Google thành công',
@@ -219,7 +224,8 @@ export class AuthService {
   }
 
   // ============================================================
-  // GOOGLE TOKEN TỪ MOBILE/FE
+  // GOOGLE TOKEN TỪ MOBILE/FE (gửi idToken lên)
+  // mode: 'login' | 'register'
   // ============================================================
   async googleWithToken(
     idToken: string,
@@ -263,69 +269,32 @@ export class AuthService {
   }
 
   // ============================================================
-  // SETUP SHOP - BƯỚC 3
-  // TẠO USER + TẠO SHOP cùng lúc
+  // SETUP SHOP (sau khi đăng ký)
+  // Cần JWT token từ bước đăng ký
   // ============================================================
   async setupShop(
     userId: string,
     dto: ShopSetupDto,
-    // ✅ Lấy thông tin user từ token
-    pendingUserData?: {
-      passwordHash: string;
-      fullName: string;
-      email: string;
-      phone: string | null;
-    },
   ): Promise<Record<string, unknown>> {
-    // ✅ Kiểm tra user đã tồn tại hay chưa
-    let user = await this.userModel.findById(userId).lean().exec();
+    // Kiểm tra user tồn tại và chưa setup shop
+    const user = await this.userModel.findById(userId).lean().exec();
+    if (!user) throw new NotFoundException('Không tìm thấy user');
 
-    // ✅ Nếu user chưa tồn tại → TẠO USER LẦN ĐẦU (chỉ khi là local, không phải Google)
-    if (!user) {
-      if (!pendingUserData) {
-        throw new BadRequestException(
-          'Thông tin người dùng không hợp lệ. Vui lòng đăng ký lại.',
-        );
-      }
-
-      try {
-        user = (
-          await this.userModel.create({
-            _id: userId,
-            shopId: null,
-            username: pendingUserData.email.split('@')[0], // Dùng phần trước @ của email làm username
-            passwordHash: pendingUserData.passwordHash,
-            fullName: pendingUserData.fullName,
-            email: pendingUserData.email,
-            phone: pendingUserData.phone || undefined,
-            provider: 'local',
-            role: 'owner',
-            shopSetupDone: false,
-          })
-        ).toObject();
-      } catch (error) {
-        const mongoError = error as { code?: number };
-        if (mongoError.code === 11000) {
-          throw new ConflictException('Thông tin đã tồn tại');
-        }
-        throw new InternalServerErrorException('Lỗi tạo tài khoản');
-      }
-    } else if (user.shopSetupDone) {
-      // ✅ Nếu user đã tồn tại và đã setup shop → báo lỗi
+    if (user.shopSetupDone) {
       throw new ConflictException('Shop đã được thiết lập rồi');
     }
 
     const shopId = `shop_${randomUUID()}`;
 
     try {
-      // ✅ Lấy tọa độ từ địa chỉ
+      // ✅ Lấy toạ độ từ địa chỉ trước khi tạo shop
       const { lat, lng } = await this.geocodingService.getCoordinates(
         dto.address,
         dto.city,
         dto.country,
       );
 
-      // ✅ Tạo shop
+      // Tạo shop kèm lat/lng
       const newShop = await this.shopModel.create({
         _id: shopId,
         name: dto.name,
@@ -335,13 +304,13 @@ export class AuthService {
         address: dto.address,
         city: dto.city,
         country: dto.country,
-        businessType: dto.businessType as string[],
+        businessType: dto.businessType,
         taxCode: dto.taxCode,
-        lat,
-        lng,
+        lat,   // ✅
+        lng,   // ✅
       });
 
-      // ✅ Cập nhật user với shopId + shopSetupDone = true
+      // Cập nhật user với shopId
       const updatedUser = await this.userModel
         .findByIdAndUpdate(
           userId,
@@ -351,14 +320,13 @@ export class AuthService {
         .lean()
         .exec();
 
-      if (!updatedUser)
-        throw new InternalServerErrorException('Lỗi cập nhật user');
+      if (!updatedUser) throw new InternalServerErrorException('Lỗi cập nhật user');
 
       const { passwordHash, ...userObj } = updatedUser;
       void passwordHash;
 
-      // ✅ Tạo token mới với shopId
-      const newToken = this.generateToken(updatedUser);
+      // Tạo token mới với shopId
+      const newToken = this.generateToken(updatedUser as unknown as Record<string, unknown>);
 
       return {
         success: true,
@@ -377,40 +345,9 @@ export class AuthService {
   }
 
   // ============================================================
-  // LẤY THÔNG TIN USER (GET /auth/me)
-  // ============================================================
-  async getMe(
-    userId: string,
-    tokenPayload: any,
-  ): Promise<Record<string, unknown>> {
-    const user = await this.userModel.findById(userId).lean().exec();
-
-    if (!user) {
-      return {
-        success: true,
-        message: 'Tài khoản chưa hoàn tất setup shop',
-        user: tokenPayload,
-      };
-    }
-
-    const { passwordHash, ...userObj } = user as any;
-    void passwordHash;
-
-    return {
-      success: true,
-      user: userObj,
-    };
-  }
-
-  // ============================================================
   // HELPER: Tạo JWT token
   // ============================================================
-  private generateToken(user: {
-    _id: unknown;
-    username: unknown;
-    role: unknown;
-    shopId: unknown;
-  }): string {
+  private generateToken(user: Record<string, unknown>): string {
     return this.jwtService.sign({
       sub: user._id,
       username: user.username,

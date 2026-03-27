@@ -7,6 +7,7 @@ import {
 } from 'class-validator';
 
 export class RegisterLocalDto {
+  // ✅ verifiedToken từ bước verify-email
   @IsString()
   @IsNotEmpty({ message: 'Vui lòng xác thực email trước khi đăng ký' })
   verifiedToken!: string;

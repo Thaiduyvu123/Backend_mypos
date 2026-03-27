@@ -43,16 +43,14 @@ export class EmailVerificationService {
       .exec();
 
     if (existingUser) {
-      throw new ConflictException(
-        'Email này đã được đăng ký. Vui lòng đăng nhập.',
-      );
+      throw new ConflictException('Email này đã được đăng ký. Vui lòng đăng nhập.');
     }
 
     // Xóa OTP cũ chưa dùng
     await this.otpModel.deleteMany({
       email: dto.email,
       isUsed: false,
-      purpose: 'register', // Phân biệt với OTP quên mật khẩu
+      purpose: 'register',  // Phân biệt với OTP quên mật khẩu
     });
 
     // Tạo OTP 6 số

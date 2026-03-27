@@ -60,19 +60,13 @@ export class PasswordService {
     }
 
     // Kiểm tra mật khẩu cũ
-    const isMatch: boolean = await bcrypt.compare(
-      dto.oldPassword,
-      user.passwordHash,
-    );
+    const isMatch = await (bcrypt.compare(dto.oldPassword, user.passwordHash) as Promise<boolean>);
     if (!isMatch) {
       throw new UnauthorizedException('Mật khẩu cũ không đúng');
     }
 
     // Kiểm tra mật khẩu mới không trùng cũ
-    const isSame: boolean = await bcrypt.compare(
-      dto.newPassword,
-      user.passwordHash,
-    );
+    const isSame = await (bcrypt.compare(dto.newPassword, user.passwordHash) as Promise<boolean>);
     if (isSame) {
       throw new BadRequestException(
         'Mật khẩu mới không được trùng mật khẩu cũ',
@@ -206,9 +200,10 @@ export class PasswordService {
     // Verify reset token
     let payload: { email: string; purpose: string };
     try {
-      payload = this.jwtService.verify<{ email: string; purpose: string }>(
-        dto.resetToken,
-      );
+      payload = this.jwtService.verify(dto.resetToken) as {
+        email: string;
+        purpose: string;
+      };
     } catch {
       throw new BadRequestException('Reset token không hợp lệ hoặc đã hết hạn');
     }

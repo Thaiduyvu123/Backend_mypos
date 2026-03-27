@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { Device, DeviceSchema } from './schemas/devices.schema';
-import { DeviceService } from './devices.service';
+import { Device, DeviceSchema } from './schemas/device.schema';
+import { DeviceService } from './device.service';
 
 @Module({
   imports: [

@@ -6,7 +6,7 @@ import { PasswordController } from './password.controller';
 import { EmailService } from './email.service';
 import { EmailVerificationService } from './email-verification.service';
 import { MongooseModule } from '@nestjs/mongoose';
-import { User, UserSchema } from 'src/modules/users/schemas/users.schema';
+import { User, UserSchema } from '../users/schemas/users.schema';
 import { Shop, ShopSchema } from '../shops/schemas/shops.schema';
 import { Otp, OtpSchema } from './schemas/otp.schema';
 import { JwtModule } from '@nestjs/jwt';
@@ -15,7 +15,7 @@ import {
   GoogleLoginStrategy,
   GoogleRegisterStrategy,
 } from './strategies/google.strategy';
-import { JwtStrategy } from './strategies/jwt.strategy';
+import { JwtStrategy } from '../../common/strategies/jwt.strategy';
 import { GeocodingService } from './geocoding.service';
 import { DevicesModule } from '../devices/devices.module';
 
@@ -28,8 +28,8 @@ import { DevicesModule } from '../devices/devices.module';
     ]),
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'mypos_secret_key_2026',
-      signOptions: { expiresIn: '1d' },
+      secret: process.env.JWT_SECRET ?? 'your_secret_key',
+      signOptions: { expiresIn: 86400 }, // 1 day in seconds
     }),
     DevicesModule,
   ],
@@ -38,7 +38,7 @@ import { DevicesModule } from '../devices/devices.module';
     AuthService,
     PasswordService,
     EmailService,
-    EmailVerificationService,
+    EmailVerificationService, // ✅ Thêm
     GoogleLoginStrategy,
     GoogleRegisterStrategy,
     JwtStrategy,

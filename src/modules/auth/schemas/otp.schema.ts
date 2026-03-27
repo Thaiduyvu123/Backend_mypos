@@ -12,24 +12,25 @@ export class Otp {
   email!: string;
 
   @Prop({ required: true })
-  otpCode!: string; // 6 số
+  otpCode!: string;
 
   @Prop({ required: true })
-  expiresAt!: Date; // Hết hạn sau 5 phút
+  expiresAt!: Date;
 
   @Prop({ default: false })
-  isUsed!: boolean; // Đã dùng chưa
+  isUsed!: boolean;
 
   @Prop({ default: 0 })
-  attempts!: number; // Số lần nhập sai (max 5)
+  attempts!: number;
 
   // ✅ Phân biệt OTP đăng ký vs quên mật khẩu
   @Prop({
     enum: ['register', 'forgot_password'],
-    required: true,
+    default: 'forgot_password',
   })
   purpose!: string;
 }
+
 export const OtpSchema = SchemaFactory.createForClass(Otp);
 
 // Tự động xóa OTP hết hạn

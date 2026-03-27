@@ -14,7 +14,7 @@ import { AuthService } from './auth.service';
 import { EmailVerificationService } from './email-verification.service';
 import { RegisterLocalDto } from './dto/register-local.dto';
 import { ShopSetupDto } from './dto/shop-setup.dto';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { JwtAuthGuard } from 'src/common/guards';
 import { GoogleUser } from './strategies/google.strategy';
 import { PreRegisterDto, VerifyEmailDto } from './dto/pre-register.dto';
 
@@ -64,8 +64,8 @@ export class AuthController {
   @Get('google/register/callback')
   @SkipThrottle()
   @UseGuards(AuthGuard('google-register'))
-  async googleRegisterCallback(@Req() req: FastifyRequest) {
-    return this.authService.registerGoogle(req.user as GoogleUser);
+  async googleRegisterCallback(@Req() req: FastifyRequest & { user?: GoogleUser }) {
+    return this.authService.registerGoogle(req.user! as GoogleUser);
   }
 
   @Get('google/login')
@@ -76,8 +76,10 @@ export class AuthController {
   @Get('google/login/callback')
   @SkipThrottle()
   @UseGuards(AuthGuard('google-login'))
-  async googleLoginCallback(@Req() req: FastifyRequest) {
-    return this.authService.loginGoogle(req.user as GoogleUser);
+  async googleLoginCallback(
+    @Req()
+   req: FastifyRequest & { user?: GoogleUser }) {
+    return this.authService.loginGoogle(req.user! as GoogleUser);
   }
 
   @Post('google/token')
