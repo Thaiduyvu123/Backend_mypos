@@ -1,7 +1,6 @@
 import {
   Injectable,
   ConflictException,
-  UnauthorizedException,
   InternalServerErrorException,
   NotFoundException,
   BadRequestException,
@@ -18,7 +17,8 @@ import { RegisterLocalDto } from './dto/register-local.dto';
 import { ShopSetupDto } from './dto/shop-setup.dto';
 import { GoogleUser } from './strategies/google.strategy';
 import { GeocodingService } from './geocoding.service';
-import { DeviceService, DeviceInfo } from '../devices/device.service';
+import { EmailService } from './email.service';
+import { Otp, OtpDocument } from './schemas/otp.schema';
 
 @Injectable()
 export class AuthService {
@@ -27,69 +27,84 @@ export class AuthService {
     private readonly userModel: Model<UserDocument>,
     @InjectModel(Shop.name)
     private readonly shopModel: Model<ShopDocument>,
+    @InjectModel(Otp.name)
+    private readonly otpModel: Model<OtpDocument>,
     private readonly jwtService: JwtService,
     private readonly geocodingService: GeocodingService,
-    private readonly deviceService: DeviceService,  // ✅ Inject
+    private readonly emailService: EmailService,
   ) {}
 
   // ============================================================
-  // ĐĂNG KÝ LOCAL
-  // Tạo user -> trả temp token -> FE gọi /shop/setup
+  // ĐĂNG KÝ LOCAL - BƯỚC 2
+  // Chỉ validate và tạo tempToken (KHÔNG tạo user)
+  // User sẽ được tạo ở bước 3 (setupShop)
   // ============================================================
   async registerLocal(dto: RegisterLocalDto): Promise<Record<string, unknown>> {
-    const { username, password, fullName, email, phone } = dto;
+    const { verifiedToken, username, password, fullName, email, phone } = dto;
 
-    // Kiểm tra username
-    const existingUser = await this.userModel.findOne({ username }).lean().exec();
+    // ✅ Bước 1: Xác thực verifiedToken
+    let tokenPayload: { email: string; purpose: string };
+    try {
+      tokenPayload = this.jwtService.verify(verifiedToken);
+    } catch {
+      throw new BadRequestException(
+        'Token xác thực email không hợp lệ hoặc đã hết hạn. Vui lòng xác thực lại.',
+      );
+    }
+    if (tokenPayload.purpose !== 'email_verified') {
+      throw new BadRequestException('Token không hợp lệ');
+    }
+
+    const verifiedEmail = tokenPayload.email;
+
+    // ✅ Bước 2: Kiểm tra username (KHÔNG tạo user)
+    const existingUser = await this.userModel
+      .findOne({ username })
+      .lean()
+      .exec();
     if (existingUser) {
       throw new ConflictException('Username đã tồn tại');
     }
 
-    // Kiểm tra email nếu có
-    if (email) {
-      const existingEmail = await this.userModel.findOne({ email }).lean().exec();
-      if (existingEmail) {
-        throw new ConflictException('Email đã được sử dụng');
-      }
+    // ✅ Bước 3: Kiểm tra email (KHÔNG tạo user)
+    const existingEmail = await this.userModel
+      .findOne({ email: verifiedEmail })
+      .lean()
+      .exec();
+    if (existingEmail) {
+      throw new ConflictException('Email đã được sử dụng');
     }
 
-    const hashedPassword: string = await bcrypt.hash(password, 10);
+    // ✅ Bước 4: Hash password để lưu trong token
+    const hashedPassword: string = password; // nhận hash từ frontend
     const userId = `user_${randomUUID()}`;
 
-    try {
-      const newUser = await this.userModel.create({
-        _id: userId,
-        shopId: null,
+    // ✅ Bước 5: Tạo tempToken với thông tin lưu vào token
+    // Thông tin này sẽ được dùng ở bước 3 (setupShop) để tạo user
+    const tempToken = this.jwtService.sign(
+      {
+        sub: userId,
         username,
-        passwordHash: hashedPassword,
-        fullName,
-        email,
-        phone,
-        provider: 'local',
-        role: 'admin',
-        shopSetupDone: false,
-      });
+        role: 'owner',
+        shopId: null,
+        // 🔑 LƯU THÔNG TIN CẦN DÙNG Ở BƯỚC 3 (setupShop)
+        pendingUserData: {
+          passwordHash: hashedPassword,
+          username,
+          fullName,
+          email: verifiedEmail,
+          phone: phone || undefined,
+        },
+      },
+      { expiresIn: '1h' }, // Token có hiệu lực 1 giờ
+    );
 
-      const { passwordHash, ...userObj } = newUser.toObject();
-      void passwordHash;
-
-      // Trả temp token (chưa có shopId)
-      const tempToken = this.generateToken(newUser.toObject() as unknown as Record<string, unknown>);
-
-      return {
-        success: true,
-        message: 'Đăng ký thành công. Vui lòng điền thông tin shop.',
-        access_token: tempToken,
-        shopSetupDone: false,
-        user: userObj,
-      };
-    } catch (error) {
-      const mongoError = error as { code?: number };
-      if (mongoError.code === 11000) {
-        throw new ConflictException('Thông tin đã tồn tại');
-      }
-      throw new InternalServerErrorException('Lỗi tạo tài khoản');
-    }
+    return {
+      success: true,
+      message: 'Xác thực thành công. Vui lòng điền thông tin shop.',
+      access_token: tempToken,
+      shopSetupDone: false,
+    };
   }
 
   // ============================================================
@@ -98,7 +113,6 @@ export class AuthService {
   async loginLocal(
     username: string,
     password: string,
-    deviceInfo?: DeviceInfo,
   ): Promise<Record<string, unknown>> {
     const user = await this.userModel.findOne({ username }).lean().exec();
 
@@ -117,16 +131,10 @@ export class AuthService {
       return { success: false, message: 'Tài khoản không có mật khẩu' };
     }
 
-    const isMatch: boolean = await (bcrypt.compare(password, user.passwordHash) as Promise<boolean>);
-    if (!isMatch) {
+    const result = await bcrypt.compare(password, user.passwordHash);
+    if (!result) {
       return { success: false, message: 'Sai mật khẩu' };
     }
-
-    // ✅ Đăng ký thiết bị - tự động đăng xuất thiết bị cũ nếu vượt giới hạn
-    const device = await this.deviceService.registerDevice(
-      user._id as string,
-      deviceInfo ?? { deviceName: 'Unknown Device' },
-    );
 
     const token = this.generateToken(user as unknown as Record<string, unknown>);
 
@@ -135,7 +143,6 @@ export class AuthService {
       message: 'Đăng nhập thành công',
       access_token: token,
       shopSetupDone: user.shopSetupDone,
-      deviceId: device._id,
     };
   }
 
@@ -146,7 +153,6 @@ export class AuthService {
   async registerGoogle(googleUser: GoogleUser): Promise<Record<string, unknown>> {
     const { providerId, fullName, email, avatarUrl } = googleUser;
 
-    // Kiểm tra email đã tồn tại chưa
     const existingUser = await this.userModel
       .findOne({ $or: [{ email }, { providerId }] })
       .lean()
@@ -171,7 +177,7 @@ export class AuthService {
         avatarUrl,
         provider: 'google',
         providerId,
-        role: 'admin',
+        role: 'owner',
         shopSetupDone: false,
       });
 
@@ -276,7 +282,6 @@ export class AuthService {
     userId: string,
     dto: ShopSetupDto,
   ): Promise<Record<string, unknown>> {
-    // Kiểm tra user tồn tại và chưa setup shop
     const user = await this.userModel.findById(userId).lean().exec();
     if (!user) throw new NotFoundException('Không tìm thấy user');
 
@@ -284,17 +289,24 @@ export class AuthService {
       throw new ConflictException('Shop đã được thiết lập rồi');
     }
 
+    // Lấy pendingUserData từ token để tạo user thật
+    const pendingData = (user as unknown as Record<string, unknown>)['pendingUserData'] as {
+      passwordHash: string;
+      username: string;
+      fullName: string;
+      email: string;
+      phone: string | null | undefined;
+    } | undefined;
+
     const shopId = `shop_${randomUUID()}`;
 
     try {
-      // ✅ Lấy toạ độ từ địa chỉ trước khi tạo shop
       const { lat, lng } = await this.geocodingService.getCoordinates(
         dto.address,
         dto.city,
         dto.country,
       );
 
-      // Tạo shop kèm lat/lng
       const newShop = await this.shopModel.create({
         _id: shopId,
         name: dto.name,
@@ -306,26 +318,44 @@ export class AuthService {
         country: dto.country,
         businessType: dto.businessType,
         taxCode: dto.taxCode,
-        lat,   // ✅
-        lng,   // ✅
+        lat,
+        lng,
       });
 
-      // Cập nhật user với shopId
-      const updatedUser = await this.userModel
-        .findByIdAndUpdate(
-          userId,
-          { shopId, shopSetupDone: true },
-          { new: true },
-        )
-        .lean()
-        .exec();
+      // Nếu user chưa được tạo (đăng ký local với verifiedToken flow)
+      // thì tạo mới; nếu đã tồn tại thì chỉ update shopId
+      let updatedUser;
+      if (pendingData) {
+        // Tạo user thật từ pendingUserData
+        await this.userModel.create({
+          _id: userId,
+          shopId,
+          username: pendingData.username,
+          passwordHash: pendingData.passwordHash,
+          fullName: pendingData.fullName,
+          email: pendingData.email,
+          phone: pendingData.phone ?? undefined,
+          provider: 'local',
+          role: 'owner',
+          shopSetupDone: true,
+        });
+        updatedUser = await this.userModel.findById(userId).lean().exec();
+      } else {
+        updatedUser = await this.userModel
+          .findByIdAndUpdate(
+            userId,
+            { shopId, shopSetupDone: true },
+            { new: true },
+          )
+          .lean()
+          .exec();
+      }
 
       if (!updatedUser) throw new InternalServerErrorException('Lỗi cập nhật user');
 
       const { passwordHash, ...userObj } = updatedUser;
       void passwordHash;
 
-      // Tạo token mới với shopId
       const newToken = this.generateToken(updatedUser as unknown as Record<string, unknown>);
 
       return {
@@ -345,14 +375,269 @@ export class AuthService {
   }
 
   // ============================================================
+  // GỬI OTP ĐỔI MẬT KHẨU
+  // POST /api/auth/send-otp-change-password
+  // ============================================================
+  async sendOtpChangePassword(
+    username: string,
+    email: string,
+  ): Promise<Record<string, unknown>> {
+    const user = await this.userModel.findOne({ username, email }).lean().exec();
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy tài khoản');
+    }
+
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    await this.otpModel.deleteMany({ email, isUsed: false, purpose: 'change_password' });
+    await this.otpModel.create({
+      _id: `otp_${randomUUID()}`,
+      email,
+      otpCode,
+      expiresAt,
+      isUsed: false,
+      attempts: 0,
+      purpose: 'change_password',
+    });
+
+    await this.emailService.sendRegisterOtp(email, otpCode);
+
+    return {
+      success: true,
+      message: `Mã OTP đã gửi tới ${email}. Có hiệu lực 5 phút`,
+    };
+  }
+
+  // ============================================================
+  // ĐỔI MẬT KHẨU (có OTP xác nhận)
+  // POST /api/auth/change-password
+  // ============================================================
+  async changePassword(
+    username: string,
+    email: string,
+    otpCode: string,
+    oldPassword: string,
+    newPassword: string,
+  ): Promise<Record<string, unknown>> {
+    const user = await this.userModel.findOne({ username, email }).lean().exec();
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy tài khoản');
+    }
+
+    const otp = await this.otpModel
+      .findOne({ email, isUsed: false, purpose: 'change_password' })
+      .sort({ createdAt: -1 })
+      .exec();
+
+    if (!otp) {
+      throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
+    }
+    if (new Date() > otp.expiresAt) {
+      await this.otpModel.findByIdAndDelete(otp._id);
+      throw new BadRequestException('OTP đã hết hạn. Vui lòng yêu cầu mã mới');
+    }
+    if (otp.attempts >= 5) {
+      await this.otpModel.findByIdAndDelete(otp._id);
+      throw new BadRequestException('Nhập sai quá nhiều lần. Vui lòng yêu cầu OTP mới');
+    }
+    if (otp.otpCode !== otpCode) {
+      await this.otpModel.findByIdAndUpdate(otp._id, { $inc: { attempts: 1 } });
+      throw new BadRequestException(`OTP không đúng. Còn ${5 - otp.attempts - 1} lần thử`);
+    }
+
+    if (!user.passwordHash) {
+      throw new BadRequestException('Tài khoản không có mật khẩu');
+    }
+    const isOldPasswordValid = await bcrypt.compare(oldPassword, user.passwordHash as string);
+    if (!isOldPasswordValid) {
+      throw new BadRequestException('Mật khẩu cũ không đúng');
+    }
+
+    await this.otpModel.findByIdAndUpdate(otp._id, { isUsed: true });
+    await this.userModel.findByIdAndUpdate(user._id, { passwordHash: newPassword });
+
+    return {
+      success: true,
+      message: 'Đổi mật khẩu thành công',
+    };
+  }
+
+  // ============================================================
+  // QUÊN MẬT KHẨU - BƯỚC 1: Gửi OTP
+  // Tìm user theo username HOẶC email rồi gửi OTP
+  // ============================================================
+  async sendOtpForgotPassword(
+    usernameOrEmail: string,
+  ): Promise<Record<string, unknown>> {
+    const user = await this.userModel.findOne({
+      $or: [{ username: usernameOrEmail }, { email: usernameOrEmail }],
+    }).lean().exec();
+
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy tài khoản');
+    }
+
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    await this.otpModel.deleteMany({ email: user.email, isUsed: false, purpose: 'forgot_password' });
+    await this.otpModel.create({
+      _id: `otp_${randomUUID()}`,
+      email: user.email,
+      otpCode,
+      expiresAt,
+      isUsed: false,
+      attempts: 0,
+      purpose: 'forgot_password',
+    });
+
+    await this.emailService.sendRegisterOtp(user.email, otpCode);
+
+    return {
+      success: true,
+      message: `Mã OTP đã gửi tới email. Có hiệu lực 5 phút`,
+      email: user.email,
+      username: user.username,
+    };
+  }
+
+  // ============================================================
+  // QUÊN MẬT KHẨU - BƯỚC 2: Xác thực OTP
+  // Chỉ kiểm tra OTP, không đổi mật khẩu
+  // ============================================================
+  async verifyOtpForgotPassword(
+    username: string,
+    email: string,
+    otpCode: string,
+  ): Promise<Record<string, unknown>> {
+    const user = await this.userModel.findOne({ username, email }).lean().exec();
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy tài khoản');
+    }
+
+    const otp = await this.otpModel
+      .findOne({ email, isUsed: false, purpose: 'forgot_password' })
+      .sort({ createdAt: -1 })
+      .exec();
+
+    if (!otp) throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
+    if (new Date() > otp.expiresAt) {
+      await this.otpModel.findByIdAndDelete(otp._id);
+      throw new BadRequestException('OTP đã hết hạn. Vui lòng yêu cầu mã mới');
+    }
+    if (otp.attempts >= 5) {
+      await this.otpModel.findByIdAndDelete(otp._id);
+      throw new BadRequestException('Nhập sai quá nhiều lần. Vui lòng yêu cầu OTP mới');
+    }
+    if (otp.otpCode !== otpCode) {
+      await this.otpModel.findByIdAndUpdate(otp._id, { $inc: { attempts: 1 } });
+      throw new BadRequestException(`OTP không đúng. Còn ${5 - otp.attempts - 1} lần thử`);
+    }
+
+    // OTP đúng nhưng chưa đánh dấu isUsed — chờ bước 3 mới đánh dấu
+    return {
+      success: true,
+      message: 'OTP hợp lệ. Vui lòng nhập mật khẩu mới',
+    };
+  }
+
+  // ============================================================
+  // QUÊN MẬT KHẨU - BƯỚC 3: Đặt lại mật khẩu
+  // Xác thực OTP rồi cập nhật mật khẩu mới (không cần mật khẩu cũ)
+  // ============================================================
+  async forgotPassword(
+    username: string,
+    email: string,
+    otpCode: string,
+    newPassword: string,
+  ): Promise<Record<string, unknown>> {
+    const user = await this.userModel.findOne({ username, email }).lean().exec();
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy tài khoản');
+    }
+
+    const otp = await this.otpModel
+      .findOne({ email, isUsed: false, purpose: 'forgot_password' })
+      .sort({ createdAt: -1 })
+      .exec();
+
+    if (!otp) throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
+    if (new Date() > otp.expiresAt) {
+      await this.otpModel.findByIdAndDelete(otp._id);
+      throw new BadRequestException('OTP đã hết hạn. Vui lòng yêu cầu mã mới');
+    }
+    if (otp.attempts >= 5) {
+      await this.otpModel.findByIdAndDelete(otp._id);
+      throw new BadRequestException('Nhập sai quá nhiều lần. Vui lòng yêu cầu OTP mới');
+    }
+    if (otp.otpCode !== otpCode) {
+      await this.otpModel.findByIdAndUpdate(otp._id, { $inc: { attempts: 1 } });
+      throw new BadRequestException(`OTP không đúng. Còn ${5 - otp.attempts - 1} lần thử`);
+    }
+
+    await this.otpModel.findByIdAndUpdate(otp._id, { isUsed: true });
+    await this.userModel.findByIdAndUpdate(user._id, { passwordHash: newPassword });
+
+    return {
+      success: true,
+      message: 'Đặt lại mật khẩu thành công',
+    };
+  }
+
+  // ============================================================
+  // ĐỔI MẬT KHẨU - BƯỚC 1: Xác minh username + mật khẩu cũ
+  // ============================================================
+  async verifyOldPassword(
+    username: string,
+    oldPassword: string,
+  ): Promise<Record<string, unknown>> {
+    const user = await this.userModel.findOne({ username }).lean().exec();
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy tài khoản');
+    }
+    if (!user.passwordHash) {
+      throw new BadRequestException('Tài khoản không có mật khẩu');
+    }
+    const isValid = await bcrypt.compare(oldPassword, user.passwordHash as string);
+    if (!isValid) {
+      throw new BadRequestException('Mật khẩu cũ không đúng');
+    }
+    return { success: true, message: 'Xác minh thành công' };
+  }
+
+  // ============================================================
+  // ĐỔI MẬT KHẨU - BƯỚC 2: Đổi mật khẩu trực tiếp (không cần OTP)
+  // ============================================================
+  async changePasswordDirect(
+    username: string,
+    oldPassword: string,
+    newPassword: string,
+  ): Promise<Record<string, unknown>> {
+    const user = await this.userModel.findOne({ username }).lean().exec();
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy tài khoản');
+    }
+    if (!user.passwordHash) {
+      throw new BadRequestException('Tài khoản không có mật khẩu');
+    }
+    const isValid = await bcrypt.compare(oldPassword, user.passwordHash as string);
+    if (!isValid) {
+      throw new BadRequestException('Mật khẩu cũ không đúng');
+    }
+    await this.userModel.findByIdAndUpdate(user._id, { passwordHash: newPassword });
+    return { success: true, message: 'Đổi mật khẩu thành công' };
+  }
+
+  // ============================================================
   // HELPER: Tạo JWT token
   // ============================================================
   private generateToken(user: Record<string, unknown>): string {
     return this.jwtService.sign({
-      sub: user._id,
-      username: user.username,
-      role: user.role,
-      shopId: user.shopId ?? null,
+      sub: user['_id'],
+      username: user['username'],
+      role: user['role'],
+      shopId: user['shopId'] ?? null,
     });
   }
 }
