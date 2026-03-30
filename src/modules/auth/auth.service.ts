@@ -279,100 +279,89 @@ export class AuthService {
   // Cần JWT token từ bước đăng ký
   // ============================================================
   async setupShop(
-    userId: string,
-    dto: ShopSetupDto,
-  ): Promise<Record<string, unknown>> {
-    const user = await this.userModel.findById(userId).lean().exec();
-    if (!user) throw new NotFoundException('Không tìm thấy user');
+  userId: string,
+  dto: ShopSetupDto,
+  pendingUserData?: {
+    passwordHash: string;
+    username: string;
+    fullName: string;
+    email: string;
+    phone?: string;
+  },
+): Promise<Record<string, unknown>> {
+  const shopId = `shop_${randomUUID()}`;
 
-    if (user.shopSetupDone) {
-      throw new ConflictException('Shop đã được thiết lập rồi');
-    }
+  try {
+    const { lat, lng } = await this.geocodingService.getCoordinates(
+      dto.address,
+      dto.city,
+      dto.country,
+    );
 
-    // Lấy pendingUserData từ token để tạo user thật
-    const pendingData = (user as unknown as Record<string, unknown>)['pendingUserData'] as {
-      passwordHash: string;
-      username: string;
-      fullName: string;
-      email: string;
-      phone: string | null | undefined;
-    } | undefined;
+    const newShop = await this.shopModel.create({
+      _id: shopId,
+      name: dto.name,
+      ownerName: dto.ownerName,
+      phone: dto.phone,
+      email: dto.email,
+      address: dto.address,
+      city: dto.city,
+      country: dto.country,
+      businessType: dto.businessType,
+      taxCode: dto.taxCode,
+      lat,
+      lng,
+    });
 
-    const shopId = `shop_${randomUUID()}`;
+    let updatedUser;
 
-    try {
-      const { lat, lng } = await this.geocodingService.getCoordinates(
-        dto.address,
-        dto.city,
-        dto.country,
-      );
-
-      const newShop = await this.shopModel.create({
-        _id: shopId,
-        name: dto.name,
-        ownerName: dto.ownerName,
-        phone: dto.phone,
-        email: dto.email,
-        address: dto.address,
-        city: dto.city,
-        country: dto.country,
-        businessType: dto.businessType,
-        taxCode: dto.taxCode,
-        lat,
-        lng,
+    if (pendingUserData) {
+      // ✅ LOCAL FLOW: Tạo user thật lần đầu tiên
+      await this.userModel.create({
+        _id: userId,
+        shopId,
+        username: pendingUserData.username,
+        passwordHash: pendingUserData.passwordHash,
+        fullName: pendingUserData.fullName,
+        email: pendingUserData.email,
+        phone: pendingUserData.phone ?? undefined,
+        provider: 'local',
+        role: 'owner',
+        shopSetupDone: true,
       });
+      updatedUser = await this.userModel.findById(userId).lean().exec();
+    } else {
+      // ✅ GOOGLE FLOW: User đã có, chỉ update
+      const existingUser = await this.userModel.findById(userId).lean().exec();
+      if (!existingUser) throw new NotFoundException('Không tìm thấy user');
+      if (existingUser.shopSetupDone) throw new ConflictException('Shop đã được thiết lập rồi');
 
-      // Nếu user chưa được tạo (đăng ký local với verifiedToken flow)
-      // thì tạo mới; nếu đã tồn tại thì chỉ update shopId
-      let updatedUser;
-      if (pendingData) {
-        // Tạo user thật từ pendingUserData
-        await this.userModel.create({
-          _id: userId,
-          shopId,
-          username: pendingData.username,
-          passwordHash: pendingData.passwordHash,
-          fullName: pendingData.fullName,
-          email: pendingData.email,
-          phone: pendingData.phone ?? undefined,
-          provider: 'local',
-          role: 'owner',
-          shopSetupDone: true,
-        });
-        updatedUser = await this.userModel.findById(userId).lean().exec();
-      } else {
-        updatedUser = await this.userModel
-          .findByIdAndUpdate(
-            userId,
-            { shopId, shopSetupDone: true },
-            { new: true },
-          )
-          .lean()
-          .exec();
-      }
-
-      if (!updatedUser) throw new InternalServerErrorException('Lỗi cập nhật user');
-
-      const { passwordHash, ...userObj } = updatedUser;
-      void passwordHash;
-
-      const newToken = this.generateToken(updatedUser as unknown as Record<string, unknown>);
-
-      return {
-        success: true,
-        message: 'Thiết lập shop thành công',
-        access_token: newToken,
-        user: userObj,
-        shop: newShop.toObject(),
-      };
-    } catch (error) {
-      const mongoError = error as { code?: number };
-      if (mongoError.code === 11000) {
-        throw new ConflictException('Thông tin shop đã tồn tại');
-      }
-      throw new InternalServerErrorException('Lỗi tạo shop');
+      updatedUser = await this.userModel
+        .findByIdAndUpdate(userId, { shopId, shopSetupDone: true }, { new: true })
+        .lean()
+        .exec();
     }
+
+    if (!updatedUser) throw new InternalServerErrorException('Lỗi cập nhật user');
+
+    const { passwordHash, ...userObj } = updatedUser;
+    void passwordHash;
+
+    const newToken = this.generateToken(updatedUser as unknown as Record<string, unknown>);
+
+    return {
+      success: true,
+      message: 'Thiết lập shop thành công',
+      access_token: newToken,
+      user: userObj,
+      shop: newShop.toObject(),
+    };
+  } catch (error) {
+    const mongoError = error as { code?: number };
+    if (mongoError.code === 11000) throw new ConflictException('Thông tin shop đã tồn tại');
+    throw new InternalServerErrorException('Lỗi tạo shop');
   }
+}
 
   // ============================================================
   // GỬI OTP ĐỔI MẬT KHẨU

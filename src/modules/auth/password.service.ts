@@ -226,4 +226,169 @@ export class PasswordService {
       message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại',
     };
   }
+  // ============================================================
+// XÁC MINH MẬT KHẨU CŨ
+// POST /api/auth/verify-old-password
+// ============================================================
+async verifyOldPassword(
+  username: string,
+  oldPassword: string,
+): Promise<Record<string, unknown>> {
+  // ✅ Tìm theo username thay vì userId
+  const user = await this.userModel.findOne({ username }).exec();
+  if (!user) throw new NotFoundException('Không tìm thấy tài khoản');
+
+  if (user.provider !== 'local') {
+    throw new BadRequestException('Tài khoản Google không có mật khẩu');
+  }
+
+  if (!user.passwordHash) {
+    throw new BadRequestException('Tài khoản không có mật khẩu');
+  }
+
+  const isMatch = await (bcrypt.compare(oldPassword, user.passwordHash) as Promise<boolean>);
+  if (!isMatch) {
+    throw new UnauthorizedException('Mật khẩu cũ không đúng');
+  }
+
+  return {
+    success: true,
+    message: 'Xác minh thành công',
+  };
+}
+// ============================================================
+// ĐỔI MẬT KHẨU TRỰC TIẾP (không cần token)
+// POST /api/auth/change-password-direct
+// Body: { username, oldPassword, newPassword }
+// ============================================================
+async changePasswordDirect(
+  username: string,
+  oldPassword: string,
+  newPassword: string,
+): Promise<Record<string, unknown>> {
+  const user = await this.userModel.findOne({ username }).exec();
+  if (!user) throw new NotFoundException('Không tìm thấy tài khoản');
+
+  if (user.provider !== 'local') {
+    throw new BadRequestException('Tài khoản Google không thể đổi mật khẩu');
+  }
+
+  if (!user.passwordHash) {
+    throw new BadRequestException('Tài khoản không có mật khẩu');
+  }
+
+  // Xác minh mật khẩu cũ
+  const isMatch = await (bcrypt.compare(oldPassword, user.passwordHash) as Promise<boolean>);
+  if (!isMatch) {
+    throw new UnauthorizedException('Mật khẩu cũ không đúng');
+  }
+
+  // Lưu mật khẩu mới (đã hash từ frontend)
+  await this.userModel.findByIdAndUpdate(user._id, { passwordHash: newPassword });
+
+  return {
+    success: true,
+    message: 'Đổi mật khẩu thành công',
+  };
+}
+async sendOtpForgotPassword(
+  usernameOrEmail: string,
+): Promise<Record<string, unknown>> {
+  const user = await this.userModel.findOne({
+    $or: [{ username: usernameOrEmail }, { email: usernameOrEmail }],
+  }).exec();
+  if (!user) throw new NotFoundException('Không tìm thấy tài khoản');
+
+  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+  await this.otpModel.deleteMany({ email: user.email, isUsed: false });
+  await this.otpModel.create({
+    _id: `otp_${randomUUID()}`,
+    email: user.email,
+    otpCode,
+    expiresAt,
+    isUsed: false,
+    attempts: 0,
+  });
+
+  const sent = await this.emailService.sendOtp(user.email, otpCode);
+  if (!sent) throw new InternalServerErrorException('Lỗi gửi email');
+
+  return {
+    success: true,
+    message: `OTP đã gửi tới email. Có hiệu lực 5 phút`,
+    email: user.email,
+    username: user.username,
+  };
+}
+
+async verifyOtpForgotPassword(
+  username: string,
+  email: string,
+  otpCode: string,
+): Promise<Record<string, unknown>> {
+  const user = await this.userModel.findOne({ username, email }).exec();
+  if (!user) throw new NotFoundException('Không tìm thấy tài khoản');
+
+  const otp = await this.otpModel
+    .findOne({ email, isUsed: false })
+    .sort({ createdAt: -1 })
+    .exec();
+
+  if (!otp) throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
+  if (new Date() > otp.expiresAt) {
+    await this.otpModel.findByIdAndDelete(otp._id);
+    throw new BadRequestException('OTP đã hết hạn. Vui lòng yêu cầu mã mới');
+  }
+  if (otp.attempts >= MAX_OTP_ATTEMPTS) {
+    await this.otpModel.findByIdAndDelete(otp._id);
+    throw new BadRequestException('Nhập sai quá nhiều lần. Vui lòng yêu cầu OTP mới');
+  }
+  if (otp.otpCode !== otpCode) {
+    await this.otpModel.findByIdAndUpdate(otp._id, { $inc: { attempts: 1 } });
+    throw new BadRequestException(`OTP không đúng. Còn ${MAX_OTP_ATTEMPTS - otp.attempts - 1} lần thử`);
+  }
+
+  // Không đánh dấu isUsed ở đây — chờ bước 3 reset password mới đánh dấu
+  return {
+    success: true,
+    message: 'OTP hợp lệ. Vui lòng nhập mật khẩu mới',
+  };
+}
+async forgotPasswordDirect(
+  username: string,
+  email: string,
+  otpCode: string,
+  newPassword: string,
+): Promise<Record<string, unknown>> {
+  const user = await this.userModel.findOne({ username, email }).exec();
+  if (!user) throw new NotFoundException('Không tìm thấy tài khoản');
+
+  const otp = await this.otpModel
+    .findOne({ email, isUsed: false })
+    .sort({ createdAt: -1 })
+    .exec();
+
+  if (!otp) throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
+  if (new Date() > otp.expiresAt) {
+    await this.otpModel.findByIdAndDelete(otp._id);
+    throw new BadRequestException('OTP đã hết hạn. Vui lòng yêu cầu mã mới');
+  }
+  if (otp.otpCode !== otpCode) {
+    await this.otpModel.findByIdAndUpdate(otp._id, { $inc: { attempts: 1 } });
+    throw new BadRequestException('OTP không đúng');
+  }
+
+  // Đánh dấu OTP đã dùng
+  await this.otpModel.findByIdAndUpdate(otp._id, { isUsed: true });
+
+  // Lưu mật khẩu mới (đã hash từ frontend)
+  await this.userModel.findByIdAndUpdate(user._id, { passwordHash: newPassword });
+
+  return {
+    success: true,
+    message: 'Đặt lại mật khẩu thành công',
+  };
+}
 }

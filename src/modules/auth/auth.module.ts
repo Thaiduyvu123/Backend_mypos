@@ -11,6 +11,7 @@ import { Shop, ShopSchema } from '../shops/schemas/shops.schema';
 import { Otp, OtpSchema } from './schemas/otp.schema';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import {
   GoogleLoginStrategy,
   GoogleRegisterStrategy,
@@ -27,9 +28,14 @@ import { DevicesModule } from '../devices/devices.module';
       { name: Otp.name, schema: OtpSchema },
     ]),
     PassportModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'your_secret_key',
-      signOptions: { expiresIn: 86400 }, // 1 day in seconds
+    // ✅ Dùng registerAsync để ConfigModule load xong trước khi đọc JWT_SECRET
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>('JWT_SECRET', 'your_secret_key'),
+        signOptions: { expiresIn: 86400 },
+      }),
+      inject: [ConfigService],
     }),
     DevicesModule,
   ],
@@ -38,7 +44,7 @@ import { DevicesModule } from '../devices/devices.module';
     AuthService,
     PasswordService,
     EmailService,
-    EmailVerificationService, // ✅ Thêm
+    EmailVerificationService,
     GoogleLoginStrategy,
     GoogleRegisterStrategy,
     JwtStrategy,

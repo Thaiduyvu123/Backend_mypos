@@ -37,3 +37,41 @@ export class ResetPasswordDto {
   @MinLength(6, { message: 'Mật khẩu mới phải có ít nhất 6 ký tự' })
   newPassword!: string;
 }
+//  DTO mới - bước 1 quên mật khẩu: nhập username hoặc email
+export class ForgotPasswordSendOtpDto {
+  @IsString()
+  @IsNotEmpty({ message: 'Vui lòng nhập username hoặc email' })
+  usernameOrEmail!: string;
+}
+
+//  DTO mới - bước 2 quên mật khẩu: xác thực OTP với username + email
+export class ForgotPasswordVerifyOtpDto {
+  @IsString()
+  @IsNotEmpty()
+  username!: string;
+
+  @IsEmail({}, { message: 'Email không hợp lệ' })
+  email!: string;
+
+  @IsString()
+  @Length(6, 6, { message: 'OTP phải có đúng 6 ký tự' })
+  otpCode!: string;
+}
+
+//  DTO mới - bước 3 quên mật khẩu: đặt lại mật khẩu với username + email + otpCode
+export class ForgotPasswordResetDto {
+  @IsString()
+  @IsNotEmpty()
+  username!: string;
+
+  @IsEmail({}, { message: 'Email không hợp lệ' })
+  email!: string;
+
+  @IsString()
+  @Length(6, 6, { message: 'OTP phải có đúng 6 ký tự' })
+  otpCode!: string;
+
+  @IsString()
+  @MinLength(6, { message: 'Mật khẩu mới phải có ít nhất 6 ký tự' })
+  newPassword!: string;
+}

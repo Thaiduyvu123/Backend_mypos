@@ -11,6 +11,13 @@ export interface JwtPayload {
   username: string;
   role: string;
   shopId: string | null;
+  pendingUserData?: {
+    passwordHash: string;
+    username: string;
+    fullName: string;
+    email: string;
+    phone?: string;
+  };
 }
 
 @Injectable()
@@ -22,16 +29,26 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET', 'secret'),
+      secretOrKey: configService.get<string>('JWT_SECRET', 'mypos_secret_key_2026'),
     });
   }
-
-  async validate(payload: JwtPayload) {
-    const user = await this.userModel.findById(payload.sub).lean();
-    if (!user) throw new UnauthorizedException('User không tồn tại');
-    if (user.isLocked) throw new UnauthorizedException('Tài khoản đã bị khóa');
-    if (!user.isActive)
-      throw new UnauthorizedException('Tài khoản không hoạt động');
-    return user;
+async validate(payload: JwtPayload) {
+  // ✅ Nếu là tempToken (local flow), user chưa có trong DB → cho qua
+  if ((payload as any).pendingUserData) {
+    return {
+      _id: payload.sub,
+      username: payload.username,
+      role: payload.role,
+      shopId: null,
+      pendingUserData: (payload as any).pendingUserData,
+    };
   }
+
+  // Flow bình thường: check DB
+  const user = await this.userModel.findById(payload.sub).lean();
+  if (!user) throw new UnauthorizedException('User không tồn tại');
+  if (user.isLocked) throw new UnauthorizedException('Tài khoản đã bị khóa');
+  if (!user.isActive) throw new UnauthorizedException('Tài khoản không hoạt động');
+  return user;
+}
 }
