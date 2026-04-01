@@ -28,7 +28,7 @@ import { DevicesModule } from '../devices/devices.module';
       { name: Otp.name, schema: OtpSchema },
     ]),
     PassportModule,
-    // ✅ Dùng registerAsync để ConfigModule load xong trước khi đọc JWT_SECRET
+    //  Dùng registerAsync để ConfigModule load xong trước khi đọc JWT_SECRET
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({

@@ -12,17 +12,14 @@ async function bootstrap() {
     new FastifyAdapter({ logger: true }),
   );
 
-  // ✅ CORS
   await app.register(require('@fastify/cors'), {
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
-  // ✅ API prefix + versioning
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI });
 
-  // ✅ Validation
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -31,10 +28,8 @@ async function bootstrap() {
     }),
   );
 
-  // ✅ Global exception filter
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  // ✅ Swagger
   const config = new DocumentBuilder()
     .setTitle('My1POS API')
     .setDescription('Landing Page + Dashboard API')

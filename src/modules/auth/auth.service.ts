@@ -328,6 +328,7 @@ export class AuthService {
         provider: 'local',
         role: 'owner',
         shopSetupDone: true,
+        businessType: dto.businessType,
       });
       updatedUser = await this.userModel.findById(userId).lean().exec();
     } else {
@@ -337,7 +338,7 @@ export class AuthService {
       if (existingUser.shopSetupDone) throw new ConflictException('Shop đã được thiết lập rồi');
 
       updatedUser = await this.userModel
-        .findByIdAndUpdate(userId, { shopId, shopSetupDone: true }, { new: true })
+        .findByIdAndUpdate(userId, { shopId, shopSetupDone: true, businessType: dto.businessType }, { new: true })
         .lean()
         .exec();
     }

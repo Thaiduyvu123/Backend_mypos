@@ -5,6 +5,7 @@ import {
   Param,
   Body,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
@@ -92,11 +93,22 @@ export class AuthController {
   googleRegister() {}
 
   @Get('google/register/callback')
-  @SkipThrottle()
-  @UseGuards(AuthGuard('google-register'))
-  async googleRegisterCallback(@Req() req: FastifyRequest & { user?: GoogleUser }) {
-    return this.authService.registerGoogle(req.user! as GoogleUser);
+@SkipThrottle()
+@UseGuards(AuthGuard('google-register'))
+async googleRegisterCallback(
+  @Req() req: FastifyRequest & { user?: GoogleUser },
+  @Res() res: any,
+) {
+  try {
+    const result = await this.authService.registerGoogle(req.user! as GoogleUser);
+    const token = result.access_token as string;
+    return res.redirect(
+      `http://localhost:3000/auth/google/callback?token=${token}&shopSetupDone=false&mode=register`
+    );
+  } catch {
+    return res.redirect(`http://localhost:3000/register?error=email_exists`);
   }
+}
 
   @Get('google/login')
   @SkipThrottle()
@@ -104,11 +116,23 @@ export class AuthController {
   googleLogin() {}
 
   @Get('google/login/callback')
-  @SkipThrottle()
-  @UseGuards(AuthGuard('google-login'))
-  async googleLoginCallback(@Req() req: FastifyRequest & { user?: GoogleUser }) {
-    return this.authService.loginGoogle(req.user! as GoogleUser);
+@SkipThrottle()
+@UseGuards(AuthGuard('google-login'))
+async googleLoginCallback(
+  @Req() req: FastifyRequest & { user?: GoogleUser },
+  @Res() res: any,
+) {
+  try {
+    const result = await this.authService.loginGoogle(req.user! as GoogleUser);
+    const token = result.access_token as string;
+    const shopSetupDone = result.shopSetupDone ? 'true' : 'false';
+    return res.redirect(
+      `http://localhost:3000/auth/google/callback?token=${token}&shopSetupDone=${shopSetupDone}&mode=login`
+    );
+  } catch {
+    return res.redirect(`http://localhost:3000/register?error=not_registered`);
   }
+}
 
   @Post('google/token')
   @Throttle({ default: { ttl: 60000, limit: 10 } })
