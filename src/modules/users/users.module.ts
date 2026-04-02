@@ -4,6 +4,7 @@ import { User, UserSchema } from './schemas/users.schema';
 import { Shop, ShopSchema } from '../shops/schemas/shops.schema';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
+import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { UsersController } from './users.controller';
       { name: User.name, schema: UserSchema },
       { name: Shop.name, schema: ShopSchema },
     ]),
+    AuditLogsModule,
   ],
   controllers: [UsersController],
   providers: [UsersService],

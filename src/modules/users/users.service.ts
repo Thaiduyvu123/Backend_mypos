@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import { AuditAction, AuditResource } from '../audit-logs/schemas/audit-log.schema';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from './schemas/users.schema';
@@ -11,6 +13,7 @@ export class UsersService {
     private readonly userModel: Model<UserDocument>,
     @InjectModel(Shop.name)
     private readonly shopModel: Model<ShopDocument>,
+    private readonly auditLogsService: AuditLogsService,
   ) {}
 
   async findAll() {
@@ -26,7 +29,7 @@ export class UsersService {
   }
 
   //  KHÓA / MỞ KHÓA
-  async toggleLock(userId: string, isLocked: boolean) {
+  async toggleLock(userId: string, isLocked: boolean, adminId: string, adminUsername: string) {
     const user = await this.userModel.findByIdAndUpdate(
       userId,
       { isLocked },
@@ -37,11 +40,20 @@ export class UsersService {
 
     const { passwordHash, ...userObj } = user;
     void passwordHash;
+    await this.auditLogsService.create({
+    actor_id: adminId,
+    actor_username: adminUsername,
+    action: isLocked ? AuditAction.LOCK_USER : AuditAction.UNLOCK_USER,
+    resource: AuditResource.USER,
+    resource_id: userId,
+    success: true,
+    description: `Admin ${adminUsername} đã ${isLocked ? 'khóa' : 'mở khóa'} tài khoản ${user.username}`,
+});
     return { success: true, message: isLocked ? 'Đã khóa tài khoản' : 'Đã mở khóa tài khoản', user: userObj };
   }
 
   //  SỬA THÔNG TIN USER
-  async updateUser(userId: string, dto: any) {
+  async updateUser(userId: string, dto: any, adminId: string, adminUsername: string) {
     const user = await this.userModel.findByIdAndUpdate(
       userId,
       {
@@ -66,6 +78,15 @@ export class UsersService {
 
     const { passwordHash, ...userObj } = user;
     void passwordHash;
+    await this.auditLogsService.create({
+    actor_id: adminId,
+    actor_username: adminUsername,
+    action: AuditAction.UPDATE,
+    resource: AuditResource.USER,
+    resource_id: userId,
+    success: true,
+    description: `Admin ${adminUsername} đã cập nhật tài khoản ${userObj.username}`,
+});
     return { success: true, message: 'Cập nhật thành công', user: userObj };
   }
 }
