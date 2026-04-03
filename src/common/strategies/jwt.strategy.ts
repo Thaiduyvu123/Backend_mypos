@@ -11,6 +11,7 @@ export interface JwtPayload {
   username: string;
   role: string;
   shopId: string | null;
+  businessTypes: string; // "rental,sale" | "rental" | "sale" | ""
   pendingUserData?: {
     passwordHash: string;
     username: string;
@@ -32,23 +33,24 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       secretOrKey: configService.get<string>('JWT_SECRET', 'mypos_secret_key_2026'),
     });
   }
-async validate(payload: JwtPayload) {
-  // ✅ Nếu là tempToken (local flow), user chưa có trong DB → cho qua
-  if ((payload as any).pendingUserData) {
-    return {
-      _id: payload.sub,
-      username: payload.username,
-      role: payload.role,
-      shopId: null,
-      pendingUserData: (payload as any).pendingUserData,
-    };
-  }
+  async validate(payload: JwtPayload) {
+    // ✅ Nếu là tempToken (local flow), user chưa có trong DB → cho qua
+    if ((payload as any).pendingUserData) {
+      return {
+        _id: payload.sub,
+        username: payload.username,
+        role: payload.role,
+        shopId: null,
+        businessTypes: payload.businessTypes ?? '',
+        pendingUserData: (payload as any).pendingUserData,
+      };
+    }
 
-  // Flow bình thường: check DB
-  const user = await this.userModel.findById(payload.sub).lean();
-  if (!user) throw new UnauthorizedException('User không tồn tại');
-  if (user.isLocked) throw new UnauthorizedException('Tài khoản đã bị khóa');
-  if (!user.isActive) throw new UnauthorizedException('Tài khoản không hoạt động');
-  return user;
-}
+    // Flow bình thường: check DB
+    const user = await this.userModel.findById(payload.sub).lean();
+    if (!user) throw new UnauthorizedException('User không tồn tại');
+    if (user.isLocked) throw new UnauthorizedException('Tài khoản đã bị khóa');
+    if (!user.isActive) throw new UnauthorizedException('Tài khoản không hoạt động');
+    return user;
+  }
 }

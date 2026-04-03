@@ -41,7 +41,7 @@ export class User {
 
   @Prop({ type: [String], enum: ['rental', 'sale'], default: [] })
   businessType!: string[];
-  
+
   @Prop({ default: false })
   shopSetupDone!: boolean;
 
