@@ -30,7 +30,7 @@ export class Shop {
   country!: string;
 
   // ✅ Đổi thành array string
-  @Prop({ type: [String], enum: ['rental', 'sale'], required: true })
+  @Prop({ type: [String], enum: ['accommodation', 'sale'], required: true })
   businessType!: string[];
 
   @Prop()

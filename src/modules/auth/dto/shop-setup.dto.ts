@@ -11,7 +11,7 @@ import {
 
 // ✅ Đổi tên thành BusinessTypeEnum để tránh xung đột với class BusinessType
 export enum BusinessTypeEnum {
-  RENTAL = 'rental',
+  ACCOMMODATION = 'accommodation',
   SALE = 'sale',
 }
 
@@ -49,7 +49,7 @@ export class ShopSetupDto {
   @ArrayMaxSize(2, { message: 'Chỉ được chọn tối đa 2 loại hình kinh doanh' })
   @IsEnum(BusinessTypeEnum, {
     each: true,
-    message: 'Loại hình không hợp lệ. Chỉ chấp nhận: rental, sale',
+    message: 'Loại hình không hợp lệ. Chỉ chấp nhận: accommodation, sale',
   })
   businessType!: BusinessTypeEnum[];
 
