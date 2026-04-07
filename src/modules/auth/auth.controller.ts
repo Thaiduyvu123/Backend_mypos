@@ -27,11 +27,11 @@ interface FastifyRequestWithUser extends FastifyRequest {
     role: string;
     shopId: string;
     pendingUserData?: {
-      passwordHash: string;
-      username: string;
-      fullName: string;
-      email: string;
-      phone?: string;
+    passwordHash: string;
+    username: string;
+    fullName: string;
+    email: string;
+    phone?: string;
     };
   };
 }
@@ -102,9 +102,7 @@ async googleRegisterCallback(
   try {
     const result = await this.authService.registerGoogle(req.user! as GoogleUser);
     const token = result.access_token as string;
-    return res.redirect(
-      `http://localhost:3000/auth/google/callback?token=${token}&shopSetupDone=false&mode=register`
-    );
+return res.redirect(`http://localhost:3000/auth/google/callback?token=${token}`);
   } catch {
     return res.redirect(`http://localhost:3000/register?error=email_exists`);
   }
@@ -114,10 +112,11 @@ async googleRegisterCallback(
   @SkipThrottle()
   @UseGuards(AuthGuard('google-login'))
   googleLogin() {}
+  
 
   @Get('google/login/callback')
-@SkipThrottle()
-@UseGuards(AuthGuard('google-login'))
+  @SkipThrottle()
+  @UseGuards(AuthGuard('google-login'))
 async googleLoginCallback(
   @Req() req: FastifyRequest & { user?: GoogleUser },
   @Res() res: any,
@@ -127,12 +126,12 @@ async googleLoginCallback(
     const token = result.access_token as string;
     const shopSetupDone = result.shopSetupDone ? 'true' : 'false';
     return res.redirect(
-      `http://localhost:3000/auth/google/callback?token=${token}&shopSetupDone=${shopSetupDone}&mode=login`
     );
   } catch {
     return res.redirect(`http://localhost:3000/register?error=not_registered`);
   }
 }
+
 
   @Post('google/token')
   @Throttle({ default: { ttl: 60000, limit: 10 } })
@@ -143,7 +142,7 @@ async googleLoginCallback(
     return this.authService.googleWithToken(idToken, mode);
   }
 
-  // ✅ Hàm setupShop đã được trả về nguyên bản như cũ
+  //  Hàm setupShop đã được trả về nguyên bản như cũ
  @Post('shop/setup')
 @UseGuards(JwtAuthGuard)
 async setupShop(

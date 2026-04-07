@@ -9,7 +9,7 @@ import {
   IsEnum,
 } from 'class-validator';
 
-// ✅ Đổi tên thành BusinessTypeEnum để tránh xung đột với class BusinessType
+//  Đổi tên thành BusinessTypeEnum để tránh xung đột với class BusinessType
 export enum BusinessTypeEnum {
   ACCOMMODATION = 'accommodation',
   SALE = 'sale',
