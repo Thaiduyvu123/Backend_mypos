@@ -623,11 +623,15 @@ export class AuthService {
   // HELPER: Tạo JWT token
   // ============================================================
   private generateToken(user: Record<string, unknown>): string {
+    const rawTypes = (user['businessType'] as string[] | undefined) ?? [];
+    const businessTypes = rawTypes.join(','); // "rental,sale" | "rental" | "sale" | ""
+
     return this.jwtService.sign({
       sub: user['_id'],
       username: user['username'],
       role: user['role'],
       shopId: user['shopId'] ?? null,
+      businessTypes,
     });
   }
 }

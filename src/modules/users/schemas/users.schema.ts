@@ -41,7 +41,7 @@ export class User {
 
   @Prop({ type: [String], enum: ['accommodation', 'sale'], default: [] })
   businessType!: string[];
-  
+
   @Prop({ default: false })
   shopSetupDone!: boolean;
 
