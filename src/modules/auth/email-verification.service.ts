@@ -37,13 +37,23 @@ export class EmailVerificationService {
   // ============================================================
   async preRegister(dto: PreRegisterDto): Promise<Record<string, unknown>> {
     // Kiểm tra email đã tồn tại chưa
-    const existingUser = await this.userModel
+    const existingEmail = await this.userModel
       .findOne({ email: dto.email })
       .lean()
       .exec();
 
-    if (existingUser) {
-      throw new ConflictException('Email này đã được đăng ký. Vui lòng đăng nhập.');
+    if (existingEmail) {
+      throw new ConflictException('Email này đã được đăng ký. Vui lòng đăng nhập hoặc dùng email khác.');
+    }
+
+    // Kiểm tra username đã tồn tại chưa
+    const existingUsername = await this.userModel
+      .findOne({ username: dto.username })
+      .lean()
+      .exec();
+
+    if (existingUsername) {
+      throw new ConflictException('Username này đã tồn tại. Vui lòng chọn username khác.');
     }
 
     // Xóa OTP cũ chưa dùng
