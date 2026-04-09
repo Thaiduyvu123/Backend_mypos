@@ -13,11 +13,14 @@ export interface JwtPayload {
   shopId: string | null;
   businessTypes: string; // "rental,sale" | "rental" | "sale" | ""
   pendingUserData?: {
-    passwordHash: string;
+    passwordHash: string | null;
     username: string;
     fullName: string;
     email: string;
     phone?: string;
+    provider?: 'local' | 'google';
+    providerId?: string;
+    avatarUrl?: string;
   };
 }
 
