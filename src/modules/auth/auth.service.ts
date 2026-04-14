@@ -620,7 +620,7 @@ export class AuthService {
   // ============================================================
   private generateToken(user: Record<string, unknown>): string {
     const rawTypes = (user['businessType'] as string[] | undefined) ?? [];
-    const businessTypes = rawTypes.join(','); // "rental,sale" | "rental" | "sale" | ""
+    const businessTypes = rawTypes.join(',');
 
     return this.jwtService.sign({
       sub: user['_id'],
@@ -628,6 +628,7 @@ export class AuthService {
       role: user['role'],
       shopId: user['shopId'] ?? null,
       businessTypes,
+      shopSetupDone: user['shopSetupDone'] ?? false, // ← THÊM DÒNG NÀY
     });
   }
 }
