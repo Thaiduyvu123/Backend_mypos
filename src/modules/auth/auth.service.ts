@@ -309,7 +309,7 @@ export class AuthService {
     let updatedUser;
 
     if (pendingUserData) {
-      // ✅ LOCAL + GOOGLE FLOW: Tạo user thật lần đầu tiên
+      //  LOCAL + GOOGLE FLOW: Tạo user thật lần đầu tiên
       const isGoogle = (pendingUserData as any).provider === 'google';
       await this.userModel.create({
         _id: userId,
@@ -328,7 +328,7 @@ export class AuthService {
       });
       updatedUser = await this.userModel.findById(userId).lean().exec();
     } else {
-      // ✅ GOOGLE FLOW: Tạo user thật lần đầu tiên (giống local flow)
+      //  GOOGLE FLOW: Tạo user thật lần đầu tiên (giống local flow)
       throw new NotFoundException('Thiếu thông tin người dùng');
     }
 

@@ -31,25 +31,25 @@ export class GeocodingService {
     const encodedAddress = encodeURIComponent(fullAddress);
 
     const url =
-      `https://nominatim.openstreetmap.org/search` +
-      `?q=${encodedAddress}` +
-      `&format=json` +
-      `&limit=1` +
-      `&addressdetails=1`;
+  `https://us1.locationiq.com/v1/search` +
+  `?key=${process.env.LOCATIONIQ_API_KEY}` +
+  `&q=${encodedAddress}` +
+  `&format=json` +
+  `&limit=1` +
+  `&countrycodes=vn` +
+  `&addressdetails=1`;
 
     try {
       this.logger.log(`Geocoding: "${fullAddress}"`);
 
       const response = await fetch(url, {
         headers: {
-          // Nominatim yêu cầu User-Agent để tránh bị block
-          'User-Agent': 'My1POS-App/1.0 (contact@my1pos.com)',
-          'Accept-Language': 'en', // Trả về tên địa danh bằng tiếng Anh
-        },
+  'Accept-Language': 'vi',
+},
       });
 
       if (!response.ok) {
-        this.logger.warn(`Nominatim HTTP error: ${response.status}`);
+        this.logger.warn(`LocationIQ HTTP error: ${response.status}`);
         return { lat: null, lng: null };
       }
 
@@ -65,12 +65,21 @@ export class GeocodingService {
       }
 
       const { lat, lon, display_name } = data[0];
-      this.logger.log(`Tìm thấy: ${display_name} → (${lat}, ${lon})`);
+        const latNum = parseFloat(lat);
+        const lngNum = parseFloat(lon);
 
-      return {
-        lat: parseFloat(lat),
-        lng: parseFloat(lon),
-      };
+        // Ràng buộc tọa độ phải nằm trong lãnh thổ Việt Nam
+        const inVietnam =
+          latNum >= 8.0 && latNum <= 23.5 &&
+          lngNum >= 102.0 && lngNum <= 110.0;
+
+        if (!inVietnam) {
+          this.logger.warn(`Tọa độ ngoài VN: (${latNum}, ${lngNum}) — "${fullAddress}"`);
+          return { lat: null, lng: null };
+        }
+
+        this.logger.log(`Tìm thấy: ${display_name} → (${latNum}, ${lngNum})`);
+        return { lat: latNum, lng: lngNum };
     } catch (error) {
       this.logger.error(`Lỗi geocoding: ${(error as Error).message}`);
       return { lat: null, lng: null };
