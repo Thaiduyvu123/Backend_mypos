@@ -19,7 +19,7 @@ interface FastifyRequestWithUser extends FastifyRequest {
 // ✅ BUG FIX: Thêm version: '1' (giống AuthController)
 // Trước: @Controller('auth') → /api/auth/change-password (KHÔNG có v1)
 // Sau:   → /api/v1/auth/change-password ✅
-@Controller({ path: 'auth', version: '1' })
+@Controller('auth')
 export class PasswordController {
   constructor(private readonly passwordService: PasswordService) {}
 
