@@ -66,7 +66,7 @@ export class AuthService {
       throw new ConflictException('Username đã tồn tại');
     }
 
-    // ✅ Bước 3: Kiểm tra email (KHÔNG tạo user)
+    //  Bước 3: Kiểm tra email (KHÔNG tạo user)
     const existingEmail = await this.userModel
       .findOne({ email: verifiedEmail })
       .lean()
@@ -75,11 +75,11 @@ export class AuthService {
       throw new ConflictException('Email đã được sử dụng');
     }
 
-    // ✅ Bước 4: Hash password để lưu trong token
+    //  Bước 4: Hash password để lưu trong token
     const hashedPassword: string = password; // nhận hash từ frontend
     const userId = `user_${randomUUID()}`;
 
-    // ✅ Bước 5: Tạo tempToken với thông tin lưu vào token
+    //  Bước 5: Tạo tempToken với thông tin lưu vào token
     // Thông tin này sẽ được dùng ở bước 3 (setupShop) để tạo user
     const tempToken = this.jwtService.sign(
       {
@@ -153,6 +153,7 @@ export class AuthService {
   async registerGoogle(googleUser: GoogleUser): Promise<Record<string, unknown>> {
     const { providerId, fullName, email, avatarUrl } = googleUser;
 
+    // Kiểm tra email đã tồn tại chưa
     const existingUser = await this.userModel
       .findOne({ $or: [{ email }, { providerId }] })
       .lean()
@@ -166,40 +167,32 @@ export class AuthService {
 
     const userId = `user_${randomUUID()}`;
 
-    try {
-      const newUser = await this.userModel.create({
-        _id: userId,
-        shopId: null,
+    // KHÔNG tạo user ngay — lưu vào tempToken, chờ bước 3
+    const tempToken = this.jwtService.sign(
+      {
+        sub: userId,
         username: `google_${providerId}`,
-        passwordHash: null,
-        fullName,
-        email,
-        avatarUrl,
-        provider: 'google',
-        providerId,
         role: 'owner',
-        shopSetupDone: false,
-      });
+        shopId: null,
+        pendingUserData: {
+          passwordHash: null,
+          username: `google_${providerId}`,
+          fullName,
+          email,
+          avatarUrl,
+          provider: 'google',
+          providerId,
+        },
+      },
+      { expiresIn: '1h' },
+    );
 
-      const { passwordHash, ...userObj } = newUser.toObject();
-      void passwordHash;
-
-      const tempToken = this.generateToken(newUser.toObject() as unknown as Record<string, unknown>);
-
-      return {
-        success: true,
-        message: 'Đăng ký Google thành công. Vui lòng điền thông tin shop.',
-        access_token: tempToken,
-        shopSetupDone: false,
-        user: userObj,
-      };
-    } catch (error) {
-      const mongoError = error as { code?: number };
-      if (mongoError.code === 11000) {
-        throw new ConflictException('Tài khoản đã tồn tại');
-      }
-      throw new InternalServerErrorException('Lỗi tạo tài khoản Google');
-    }
+    return {
+      success: true,
+      message: 'Đăng ký Google thành công. Vui lòng điền thông tin shop.',
+      access_token: tempToken,
+      shopSetupDone: false,
+    };
   }
 
   // ============================================================
@@ -316,31 +309,27 @@ export class AuthService {
     let updatedUser;
 
     if (pendingUserData) {
-      // ✅ LOCAL FLOW: Tạo user thật lần đầu tiên
+      //  LOCAL + GOOGLE FLOW: Tạo user thật lần đầu tiên
+      const isGoogle = (pendingUserData as any).provider === 'google';
       await this.userModel.create({
         _id: userId,
         shopId,
         username: pendingUserData.username,
-        passwordHash: pendingUserData.passwordHash,
+        passwordHash: isGoogle ? null : pendingUserData.passwordHash,
         fullName: pendingUserData.fullName,
         email: pendingUserData.email,
         phone: pendingUserData.phone ?? undefined,
-        provider: 'local',
+        avatarUrl: isGoogle ? (pendingUserData as any).avatarUrl : undefined,
+        provider: isGoogle ? 'google' : 'local',
+        providerId: isGoogle ? (pendingUserData as any).providerId : undefined,
         role: 'owner',
         shopSetupDone: true,
         businessType: dto.businessType,
       });
       updatedUser = await this.userModel.findById(userId).lean().exec();
     } else {
-      // ✅ GOOGLE FLOW: User đã có, chỉ update
-      const existingUser = await this.userModel.findById(userId).lean().exec();
-      if (!existingUser) throw new NotFoundException('Không tìm thấy user');
-      if (existingUser.shopSetupDone) throw new ConflictException('Shop đã được thiết lập rồi');
-
-      updatedUser = await this.userModel
-        .findByIdAndUpdate(userId, { shopId, shopSetupDone: true, businessType: dto.businessType }, { new: true })
-        .lean()
-        .exec();
+      //  GOOGLE FLOW: Tạo user thật lần đầu tiên (giống local flow)
+      throw new NotFoundException('Thiếu thông tin người dùng');
     }
 
     if (!updatedUser) throw new InternalServerErrorException('Lỗi cập nhật user');
@@ -358,6 +347,13 @@ export class AuthService {
       shop: newShop.toObject(),
     };
   } catch (error) {
+    if (
+      error instanceof NotFoundException ||
+      error instanceof ConflictException ||
+      error instanceof BadRequestException
+    ) {
+      throw error;
+    }
     const mongoError = error as { code?: number };
     if (mongoError.code === 11000) throw new ConflictException('Thông tin shop đã tồn tại');
     throw new InternalServerErrorException('Lỗi tạo shop');
