@@ -136,7 +136,7 @@ export class AuthService {
       return { success: false, message: 'Sai mật khẩu' };
     }
 
-    const token = this.generateToken(user as unknown as Record<string, unknown>);
+    const token = await this.generateToken(user as unknown as Record<string, unknown>);
 
     return {
       success: true,
@@ -213,7 +213,7 @@ export class AuthService {
       );
     }
 
-    const token = this.generateToken(user as unknown as Record<string, unknown>);
+    const token = await this.generateToken(user as unknown as Record<string, unknown>);
     return {
       success: true,
       message: 'Đăng nhập Google thành công',
@@ -272,93 +272,93 @@ export class AuthService {
   // Cần JWT token từ bước đăng ký
   // ============================================================
   async setupShop(
-  userId: string,
-  dto: ShopSetupDto,
-  pendingUserData?: {
-    passwordHash: string;
-    username: string;
-    fullName: string;
-    email: string;
-    phone?: string;
-  },
-): Promise<Record<string, unknown>> {
-  const shopId = `shop_${randomUUID()}`;
+    userId: string,
+    dto: ShopSetupDto,
+    pendingUserData?: {
+      passwordHash: string;
+      username: string;
+      fullName: string;
+      email: string;
+      phone?: string;
+    },
+  ): Promise<Record<string, unknown>> {
+    const shopId = `shop_${randomUUID()}`;
 
-  try {
-    const { lat, lng } = await this.geocodingService.getCoordinates(
-      dto.address,
-      dto.city,
-      dto.country,
-    );
+    try {
+      const { lat, lng } = await this.geocodingService.getCoordinates(
+        dto.address,
+        dto.city,
+        dto.country,
+      );
 
-    const newShop = await this.shopModel.create({
-      _id: shopId,
-      name: dto.name,
-      ownerName: dto.ownerName,
-      phone: dto.phone,
-      email: dto.email,
-      address: dto.address,
-      city: dto.city,
-      country: dto.country,
-      businessType: dto.businessType,
-      taxCode: dto.taxCode,
-      lat,
-      lng,
-    });
-
-    let updatedUser;
-
-    if (pendingUserData) {
-      //  LOCAL + GOOGLE FLOW: Tạo user thật lần đầu tiên
-      const isGoogle = (pendingUserData as any).provider === 'google';
-      await this.userModel.create({
-        _id: userId,
-        shopId,
-        username: pendingUserData.username,
-        passwordHash: isGoogle ? null : pendingUserData.passwordHash,
-        fullName: pendingUserData.fullName,
-        email: pendingUserData.email,
-        phone: pendingUserData.phone ?? undefined,
-        avatarUrl: isGoogle ? (pendingUserData as any).avatarUrl : undefined,
-        provider: isGoogle ? 'google' : 'local',
-        providerId: isGoogle ? (pendingUserData as any).providerId : undefined,
-        role: 'owner',
-        shopSetupDone: true,
+      const newShop = await this.shopModel.create({
+        _id: shopId,
+        name: dto.name,
+        ownerName: dto.ownerName,
+        phone: dto.phone,
+        email: dto.email,
+        address: dto.address,
+        city: dto.city,
+        country: dto.country,
         businessType: dto.businessType,
+        taxCode: dto.taxCode,
+        lat,
+        lng,
       });
-      updatedUser = await this.userModel.findById(userId).lean().exec();
-    } else {
-      //  GOOGLE FLOW: Tạo user thật lần đầu tiên (giống local flow)
-      throw new NotFoundException('Thiếu thông tin người dùng');
+
+      let updatedUser;
+
+      if (pendingUserData) {
+        //  LOCAL + GOOGLE FLOW: Tạo user thật lần đầu tiên
+        const isGoogle = (pendingUserData as any).provider === 'google';
+        await this.userModel.create({
+          _id: userId,
+          shopId,
+          username: pendingUserData.username,
+          passwordHash: isGoogle ? null : pendingUserData.passwordHash,
+          fullName: pendingUserData.fullName,
+          email: pendingUserData.email,
+          phone: pendingUserData.phone ?? undefined,
+          avatarUrl: isGoogle ? (pendingUserData as any).avatarUrl : undefined,
+          provider: isGoogle ? 'google' : 'local',
+          providerId: isGoogle ? (pendingUserData as any).providerId : undefined,
+          role: 'owner',
+          shopSetupDone: true,
+          businessType: dto.businessType,
+        });
+        updatedUser = await this.userModel.findById(userId).lean().exec();
+      } else {
+        //  GOOGLE FLOW: Tạo user thật lần đầu tiên (giống local flow)
+        throw new NotFoundException('Thiếu thông tin người dùng');
+      }
+
+      if (!updatedUser) throw new InternalServerErrorException('Lỗi cập nhật user');
+
+      const { passwordHash, ...userObj } = updatedUser;
+      void passwordHash;
+
+      const newToken = await this.generateToken(updatedUser as unknown as Record<string, unknown>);
+
+      return {
+        success: true,
+        message: 'Thiết lập shop thành công',
+        access_token: newToken,
+        user: userObj,
+        shop: newShop.toObject(),
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ConflictException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      const mongoError = error as { code?: number };
+      if (mongoError.code === 11000) throw new ConflictException('Thông tin shop đã tồn tại');
+      throw new InternalServerErrorException('Lỗi tạo shop');
     }
-
-    if (!updatedUser) throw new InternalServerErrorException('Lỗi cập nhật user');
-
-    const { passwordHash, ...userObj } = updatedUser;
-    void passwordHash;
-
-    const newToken = this.generateToken(updatedUser as unknown as Record<string, unknown>);
-
-    return {
-      success: true,
-      message: 'Thiết lập shop thành công',
-      access_token: newToken,
-      user: userObj,
-      shop: newShop.toObject(),
-    };
-  } catch (error) {
-    if (
-      error instanceof NotFoundException ||
-      error instanceof ConflictException ||
-      error instanceof BadRequestException
-    ) {
-      throw error;
-    }
-    const mongoError = error as { code?: number };
-    if (mongoError.code === 11000) throw new ConflictException('Thông tin shop đã tồn tại');
-    throw new InternalServerErrorException('Lỗi tạo shop');
   }
-}
 
   // ============================================================
   // GỬI OTP ĐỔI MẬT KHẨU
@@ -451,7 +451,6 @@ export class AuthService {
 
   // ============================================================
   // QUÊN MẬT KHẨU - BƯỚC 1: Gửi OTP
-  // Tìm user theo username HOẶC email rồi gửi OTP
   // ============================================================
   async sendOtpForgotPassword(
     usernameOrEmail: string,
@@ -490,7 +489,6 @@ export class AuthService {
 
   // ============================================================
   // QUÊN MẬT KHẨU - BƯỚC 2: Xác thực OTP
-  // Chỉ kiểm tra OTP, không đổi mật khẩu
   // ============================================================
   async verifyOtpForgotPassword(
     username: string,
@@ -521,7 +519,6 @@ export class AuthService {
       throw new BadRequestException(`OTP không đúng. Còn ${5 - otp.attempts - 1} lần thử`);
     }
 
-    // OTP đúng nhưng chưa đánh dấu isUsed — chờ bước 3 mới đánh dấu
     return {
       success: true,
       message: 'OTP hợp lệ. Vui lòng nhập mật khẩu mới',
@@ -530,7 +527,6 @@ export class AuthService {
 
   // ============================================================
   // QUÊN MẬT KHẨU - BƯỚC 3: Đặt lại mật khẩu
-  // Xác thực OTP rồi cập nhật mật khẩu mới (không cần mật khẩu cũ)
   // ============================================================
   async forgotPassword(
     username: string,
@@ -616,19 +612,50 @@ export class AuthService {
   }
 
   // ============================================================
-  // HELPER: Tạo JWT token
+  // HELPER: Tạo JWT token (async — query shop từ DB)
+  // Payload bổ sung: taxCode, address, shopName, shopPhone, shopEmail
   // ============================================================
-  private generateToken(user: Record<string, unknown>): string {
+  async generateToken(user: Record<string, unknown>): Promise<string> {
     const rawTypes = (user['businessType'] as string[] | undefined) ?? [];
     const businessTypes = rawTypes.join(',');
+
+    // Lấy thông tin shop từ DB nếu user đã có shopId
+    let taxCode: string | null = null;
+    let address: string | null = null;
+    let shopName: string | null = null;
+    let shopPhone: string | null = null;
+    let shopEmail: string | null = null;
+
+    const shopId = user['shopId'] as string | null;
+    if (shopId) {
+      const shop = await this.shopModel
+        .findById(shopId)
+        .select('taxCode address name phone email')
+        .lean()
+        .exec();
+
+      if (shop) {
+        taxCode    = (shop as any).taxCode  ?? null;
+        address    = (shop as any).address  ?? null;
+        shopName   = (shop as any).name     ?? null;
+        shopPhone  = (shop as any).phone    ?? null;
+        shopEmail  = (shop as any).email    ?? null;
+      }
+    }
 
     return this.jwtService.sign({
       sub: user['_id'],
       username: user['username'],
       role: user['role'],
-      shopId: user['shopId'] ?? null,
+      shopId: shopId ?? null,
       businessTypes,
-      shopSetupDone: user['shopSetupDone'] ?? false, // ← THÊM DÒNG NÀY
+      shopSetupDone: user['shopSetupDone'] ?? false,
+      // ── Thông tin shop bổ sung ──────────────────────────────
+      taxCode,
+      address,
+      shopName,
+      shopPhone,
+      shopEmail,
     });
   }
 }
