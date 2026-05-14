@@ -75,8 +75,9 @@ export class AuthService {
       throw new ConflictException('Email đã được sử dụng');
     }
 
-    //  Bước 4: Hash password để lưu trong token
-    const hashedPassword: string = password; // nhận hash từ frontend
+    //  Bước 4: Nhận password đã hash từ frontend (bcrypt hash)
+    // FE dùng bcryptjs.hash(password, 10) trước khi gửi → BE lưu thẳng
+    const hashedPassword: string = password;
     const userId = `user_${randomUUID()}`;
 
     //  Bước 5: Tạo tempToken với thông tin lưu vào token
@@ -327,9 +328,6 @@ export class AuthService {
           businessType: dto.businessType,
         });
         updatedUser = await this.userModel.findById(userId).lean().exec();
-      } else {
-        //  GOOGLE FLOW: Tạo user thật lần đầu tiên (giống local flow)
-        throw new NotFoundException('Thiếu thông tin người dùng');
       }
 
       if (!updatedUser) throw new InternalServerErrorException('Lỗi cập nhật user');
@@ -441,6 +439,7 @@ export class AuthService {
     }
 
     await this.otpModel.findByIdAndUpdate(otp._id, { isUsed: true });
+    // newPassword đã được hash từ FE (bcryptjs.hash) → lưu thẳng
     await this.userModel.findByIdAndUpdate(user._id, { passwordHash: newPassword });
 
     return {

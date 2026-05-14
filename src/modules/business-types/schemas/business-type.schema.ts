@@ -5,7 +5,7 @@ export type BusinessTypeDocument = BusinessType & Document;
 
 @Schema({ timestamps: true })
 export class BusinessType {
-  @Prop({ required: true, unique: true })
+  @Prop({ required: true })
   _id!: string;
 
   @Prop({ required: true })

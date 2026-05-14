@@ -5,7 +5,7 @@ export type DeviceDocument = Device & Document;
 
 @Schema({ timestamps: true })
 export class Device {
-  @Prop({ required: true, unique: true })
+  @Prop({ required: true })
   _id!: string;
 
   @Prop({ required: true })

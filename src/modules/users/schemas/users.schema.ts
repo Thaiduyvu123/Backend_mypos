@@ -5,7 +5,7 @@ export type UserDocument = User & Document;
 
 @Schema({ collection: 'users', timestamps: true })
 export class User {
-  @Prop({ required: true, unique: true })
+  @Prop({ required: true })
   _id!: string;
 
   @Prop({ default: null, type: String })
@@ -68,7 +68,7 @@ export class User {
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
-UserSchema.index({ username: 1 });
+// username đã có unique:true trong @Prop nên không khai báo lại tránh duplicate index
 UserSchema.index({ email: 1 });
 UserSchema.index({ shopId: 1 });
 UserSchema.index({ role: 1 });
