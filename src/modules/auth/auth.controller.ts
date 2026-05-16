@@ -100,15 +100,16 @@ export class AuthController {
     @Req() req: FastifyRequest & { user?: GoogleUser },
     @Res() res: any,
   ) {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     try {
       const result = await this.authService.registerGoogle(req.user! as GoogleUser);
       const token = result.access_token as string;
       return res.redirect(
-        `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/auth/google/callback?token=${token}`,
+        `${frontendUrl}/auth/google/callback?token=${token}`,
       );
     } catch {
       return res.redirect(
-        `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/register?error=email_exists`,
+        `${frontendUrl}/register?error=email_exists`,
       );
     }
   }
@@ -125,16 +126,17 @@ export class AuthController {
     @Req() req: FastifyRequest & { user?: GoogleUser },
     @Res() res: any,
   ) {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     try {
       const result = await this.authService.loginGoogle(req.user! as GoogleUser);
       const token = result.access_token as string;
       const shopSetupDone = result.shopSetupDone ? 'true' : 'false';
       return res.redirect(
-        `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/auth/google/callback?token=${token}&shopSetupDone=${shopSetupDone}`,
+        `${frontendUrl}/auth/google/callback?token=${token}&shopSetupDone=${shopSetupDone}`,
       );
     } catch {
       return res.redirect(
-        `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/register?error=not_registered`,
+        `${frontendUrl}/register?error=not_registered`,
       );
     }
   }
@@ -161,5 +163,16 @@ export class AuthController {
     const userId = req.user._id;
     const pendingUserData = req.user.pendingUserData;
     return this.authService.setupShop(userId, dto, pendingUserData);
+  }
+
+  // ============================================================
+  // DIAGNOSTIC: Test Gmail Configuration
+  // GET /api/auth/email/test
+  // Use this to verify Gmail credentials are working
+  // ============================================================
+  @Get('email/test')
+  @SkipThrottle()
+  async testEmailConfiguration() {
+    return this.emailVerificationService.testEmailConfiguration();
   }
 }

@@ -21,7 +21,7 @@ interface RequestWithUser extends FastifyRequest {
   };
 }
 
-@Controller('shops')
+@Controller({ path: 'shops', version: '1' })
 @SkipThrottle()
 export class ShopsController {
   constructor(private readonly shopsService: ShopsService) {}

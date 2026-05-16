@@ -7,13 +7,56 @@ export class EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor() {
+    const gmailUser = process.env.GMAIL_USER;
+    const gmailPassword = process.env.GMAIL_APP_PASSWORD;
+
+    // Validate environment variables on initialization
+    if (!gmailUser || !gmailPassword) {
+      this.logger.error('❌ Missing Gmail credentials in .env file');
+      this.logger.error(`GMAIL_USER: ${gmailUser ? '✓ Set' : '✗ Not set'}`);
+      this.logger.error(`GMAIL_APP_PASSWORD: ${gmailPassword ? '✓ Set' : '✗ Not set'}`);
+    }
+
     this.transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
+        user: gmailUser,
+        pass: gmailPassword,
       },
     });
+
+    // Test connection on initialization
+    this.testConnection();
+  }
+
+  // Test Gmail connection
+  private async testConnection(): Promise<void> {
+    const isConnected = await this.verifyConnection();
+    if (isConnected) {
+      this.logger.log('✅ Gmail connection verified successfully');
+    } else {
+      this.logger.error('❌ Failed to verify Gmail connection');
+      this.logger.error(
+        'Please check your Gmail credentials and ensure:',
+      );
+      this.logger.error('1. GMAIL_USER is correct');
+      this.logger.error('2. GMAIL_APP_PASSWORD is set (not regular password)');
+      this.logger.error('3. 2-factor authentication is enabled');
+      this.logger.error('4. App passwords are enabled in Google Account');
+    }
+  }
+
+  // Public method to verify connection (used by diagnostic endpoint)
+  async verifyConnection(): Promise<boolean> {
+    try {
+      await this.transporter.verify();
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Failed to verify Gmail connection: ${(error as Error).message}`,
+      );
+      return false;
+    }
   }
 
   // ✅ OTP xác thực email khi đăng ký
@@ -50,7 +93,7 @@ export class EmailService {
     },
   ): Promise<boolean> {
     try {
-      await this.transporter.sendMail({
+      const mailOptions = {
         from: `"My1POS" <${process.env.GMAIL_USER}>`,
         to: email,
         subject: options.subject,
@@ -82,12 +125,39 @@ export class EmailService {
             </p>
           </div>
         `,
-      });
+      };
 
-      this.logger.log(`✅ Đã gửi OTP tới ${email}`);
+      this.logger.debug(`Sending email to: ${email}`);
+      const result = await this.transporter.sendMail(mailOptions);
+      
+      this.logger.log(`✅ Email sent successfully to ${email}`);
+      this.logger.debug(`Message ID: ${result.messageId}`);
       return true;
     } catch (error) {
-      this.logger.error(`❌ Lỗi gửi email: ${(error as Error).message}`);
+      const errorMessage = (error as Error).message;
+      const errorCode = (error as any).code;
+      const errorResponse = (error as any).response;
+
+      this.logger.error(`❌ Failed to send email to ${email}`);
+      this.logger.error(`Error: ${errorMessage}`);
+      
+      if (errorCode) {
+        this.logger.error(`Error Code: ${errorCode}`);
+      }
+
+      if (errorResponse) {
+        this.logger.error(`Error Response: ${errorResponse}`);
+      }
+
+      // Provide diagnostic hints
+      if (errorMessage.includes('invalid login') || errorMessage.includes('535')) {
+        this.logger.error('Hint: Invalid Gmail credentials. Check GMAIL_USER and GMAIL_APP_PASSWORD');
+      } else if (errorMessage.includes('authenticate') || errorMessage.includes('credentials')) {
+        this.logger.error('Hint: Authentication failed. Ensure app password is enabled in Google Account');
+      } else if (errorMessage.includes('network') || errorMessage.includes('ECONNREFUSED')) {
+        this.logger.error('Hint: Network error. Check your internet connection');
+      }
+
       return false;
     }
   }

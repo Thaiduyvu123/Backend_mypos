@@ -146,4 +146,82 @@ export class EmailVerificationService {
       expiresIn: `${VERIFIED_TOKEN_EXPIRE_MINUTES} phút`,
     };
   }
+
+  // ============================================================
+  // DIAGNOSTIC: Test Gmail Email Configuration
+  // GET /api/auth/email/test
+  // ============================================================
+  async testEmailConfiguration(): Promise<Record<string, unknown>> {
+    const gmailUser = process.env.GMAIL_USER;
+    const gmailPassword = process.env.GMAIL_APP_PASSWORD;
+
+    // Check if credentials are set
+    if (!gmailUser || !gmailPassword) {
+      return {
+        success: false,
+        status: 'MISSING_CREDENTIALS',
+        message: 'Gmail credentials not configured in .env file',
+        details: {
+          GMAIL_USER: gmailUser ? '✓ Set' : '✗ Missing',
+          GMAIL_APP_PASSWORD: gmailPassword ? '✓ Set' : '✗ Missing',
+        },
+        troubleshooting: [
+          'Add GMAIL_USER and GMAIL_APP_PASSWORD to .env file',
+          'See GMAIL_SETUP.md for detailed instructions',
+        ],
+      };
+    }
+
+    // Check credentials format
+    if (gmailPassword.length !== 16 || gmailPassword.includes(' ')) {
+      return {
+        success: false,
+        status: 'INVALID_APP_PASSWORD_FORMAT',
+        message: 'GMAIL_APP_PASSWORD format is invalid',
+        details: {
+          expectedLength: 16,
+          actualLength: gmailPassword.length,
+          hasSpaces: gmailPassword.includes(' '),
+        },
+        troubleshooting: [
+          'App password should be exactly 16 characters without spaces',
+          'Generate a new app password from Google Account settings',
+          'See GMAIL_SETUP.md for detailed instructions',
+        ],
+      };
+    }
+
+    // Verify the connection using email service
+    const isConnected = await this.emailService.verifyConnection();
+
+    if (isConnected) {
+      return {
+        success: true,
+        status: 'CONNECTED',
+        message: '✅ Gmail SMTP connection verified successfully',
+        details: {
+          email: gmailUser,
+          status: 'Connected and ready to send emails',
+        },
+      };
+    } else {
+      return {
+        success: false,
+        status: 'CONNECTION_FAILED',
+        message: '❌ Failed to verify Gmail SMTP connection',
+        details: {
+          email: gmailUser,
+          status: 'Connection verification failed',
+        },
+        troubleshooting: [
+          'Check your internet connection',
+          'Verify GMAIL_USER and GMAIL_APP_PASSWORD are correct',
+          'Ensure 2-factor authentication is enabled on Gmail account',
+          'Verify app password is generated and not yet expired',
+          'Check Google Account security settings',
+          'See GMAIL_SETUP.md for detailed instructions',
+        ],
+      };
+    }
+  }
 }

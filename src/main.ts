@@ -12,8 +12,13 @@ async function bootstrap() {
     new FastifyAdapter({ logger: true }),
   );
 
-  await app.register(require('@fastify/cors'), {
-    origin: '*',
+await app.register(require('@fastify/cors'),{
+    origin: [
+      'https://landing-page-my-pos.vercel.app',
+      'http://localhost:3000',
+      'http://localhost:5173',
+    ],
+    credentials: true, // ⚠️ thêm nếu dùng cookie/session
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
@@ -56,7 +61,13 @@ async function bootstrap() {
   const port = process.env.PORT ?? 3001;
   await app.listen(port, '0.0.0.0');
 
-  console.log(`🚀 API:     http://localhost:${port}/api/v1`);
-  console.log(`📖 Swagger: http://localhost:${port}/docs`);
+  // Determine base URL based on environment
+  const isProduction = process.env.NODE_ENV === 'production';
+  const baseUrl = isProduction 
+    ? 'https://myposapi.onrender.com'
+    : `http://localhost:${port}`;
+
+  console.log(`🚀 API:     ${baseUrl}/api/v1`);
+  console.log(`📖 Swagger: ${baseUrl}/docs`);
 }
 bootstrap();
