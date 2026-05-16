@@ -57,7 +57,7 @@ export class BusinessTypesService {
 // =============================================
 import { Controller, Get } from '@nestjs/common';
 
-@Controller('business-types')
+@Controller({ path: 'business-types', version: '1' })
 export class BusinessTypesController {
   constructor(private readonly businessTypesService: BusinessTypesService) {}
 
